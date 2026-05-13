@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VM Tippning - Admin</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <main class="page">
+    <header class="hero">
+      <div class="hero-copy">
+        <h1>Admin facit</h1>
+        <p>Skriv in resultat och slutspelsfacit.</p>
+      </div>
+      <button id="logoutBtn" type="button" class="logout-corner" hidden>Logga ut</button>
+    </header>
+
+    <section id="loginCard" class="card auth-card">
+      <h2>Adminlosenord</h2>
+      <label for="adminPassword">Losenord</label>
+      <input id="adminPassword" type="password" autocomplete="current-password">
+      <button id="loginBtn" type="button">Logga in</button>
+    </section>
+
+    <section id="adminPanel" class="card" hidden>
+      <h2>Matchfacit</h2>
+      <p class="help">Tomma mal sparas som ospelad match. For slutspelsmatcher kan du ange laget som gar vidare.</p>
+      <button id="refreshBtn" type="button">Hamta facit</button>
+      <div id="matchesAdminList" class="stack"></div>
+    </section>
+
+    <section id="playoffPanel" class="card" hidden>
+      <h2>Slutspelsfacit</h2>
+      <p class="help">Valj vilka lag som faktiskt tog sig till varje runda.</p>
+      <div id="playoffResultsList" class="stack"></div>
+      <button id="savePlayoffBtn" type="button">Spara slutspelsfacit</button>
+    </section>
+
+    <section class="card">
+      <h2>Status</h2>
+      <pre id="statusOutput">Klar.</pre>
+    </section>
+  </main>
+
+  <script src="./admin.js"></script>
+</body>
+</html>

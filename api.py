@@ -11,6 +11,7 @@ from auth import (
     byt_losenord_med_token,
     hamta_anvandare_fran_token,
     logga_in,
+    logga_in_admin_med_losenord,
     logga_ut,
     skapa_anvandare,
 )
@@ -20,8 +21,11 @@ from databas import (
     find_user_by_email,
     load_matches,
     load_players,
+    load_playoff_results,
     load_predictions,
+    save_matches,
     save_players,
+    save_playoff_results,
     save_predictions,
 )
 
@@ -44,6 +48,10 @@ class LoginRequest(BaseModel):
 class ChangePasswordRequest(BaseModel):
     current_password: str = Field(min_length=1)
     new_password: str = Field(min_length=1)
+
+
+class AdminLoginRequest(BaseModel):
+    password: str = Field(min_length=1)
 
 
 class CreateUserRequest(BaseModel):
@@ -70,6 +78,12 @@ class SavePlayoffTeamsRequest(BaseModel):
 
 class SavePlayoffPredictionsRequest(BaseModel):
     rounds: dict[str, list[str]] = Field(default_factory=dict)
+
+
+class SaveMatchResultRequest(BaseModel):
+    home_goals: int | None = Field(default=None, ge=0)
+    away_goals: int | None = Field(default=None, ge=0)
+    advancing_team: str | None = Field(default=None)
 
 
 PLAYOFF_ROUND_LIMITS = {
@@ -105,6 +119,13 @@ def _require_user(credentials: HTTPAuthorizationCredentials | None = Depends(sec
     user = hamta_anvandare_fran_token(token)
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
+    return user
+
+
+def _require_admin(credentials: HTTPAuthorizationCredentials | None = Depends(security)) -> dict[str, Any]:
+    user = _require_user(credentials)
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin behorighet kravs")
     return user
 
 
@@ -260,6 +281,28 @@ def _playoff_response(rounds: dict[str, list[str]]) -> dict[str, Any]:
     }
 
 
+def _normalize_playoff_results(raw_rounds: dict[str, Any]) -> dict[str, list[str]]:
+    return _normalize_playoff_rounds(raw_rounds)
+
+
+def _load_playoff_results_rounds() -> dict[str, list[str]]:
+    rounds = _empty_playoff_rounds()
+    for row in load_playoff_results():
+        round_key = str(row.get("round", "")).strip().lower()
+        if round_key not in rounds:
+            continue
+        teams = row.get("teams", [])
+        if isinstance(teams, list):
+            rounds[round_key] = [str(team).strip() for team in teams if str(team).strip()]
+    return rounds
+
+
+def _save_playoff_results_rounds(rounds: dict[str, list[str]]) -> None:
+    save_playoff_results(
+        [{"round": round_key, "teams": rounds[round_key]} for round_key in PLAYOFF_ROUNDS]
+    )
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
@@ -273,6 +316,14 @@ def login(payload: LoginRequest) -> dict[str, Any]:
     user = result.get("user", {})
     if user.get("role") == "admin" and user.get("must_change_password"):
         result["next_endpoint"] = "/change-password"
+    return result
+
+
+@app.post("/admin/login")
+def admin_login(payload: AdminLoginRequest) -> dict[str, Any]:
+    result = logga_in_admin_med_losenord(payload.password)
+    if result is None:
+        raise HTTPException(status_code=401, detail="Fel adminlosenord")
     return result
 
 
@@ -565,6 +616,63 @@ def save_playoff_teams(
     rounds["attondel"] = payload.teams
     saved = save_playoff_predictions(SavePlayoffPredictionsRequest(rounds=rounds), user)
     return {"teams": saved["rounds"].get("attondel", [])}
+
+
+@app.get("/admin/facit")
+def admin_facit(_: dict[str, Any] = Depends(_require_admin)) -> dict[str, Any]:
+    return {
+        "matches": load_matches(),
+        "playoff_results": _load_playoff_results_rounds(),
+        "playoff_limits": PLAYOFF_ROUND_LIMITS,
+        "playoff_labels": PLAYOFF_ROUND_LABELS,
+        "playoff_order": list(PLAYOFF_ROUNDS),
+    }
+
+
+@app.post("/admin/matches/{match_id}/result")
+def admin_save_match_result(
+    match_id: int,
+    payload: SaveMatchResultRequest,
+    _: dict[str, Any] = Depends(_require_admin),
+) -> dict[str, Any]:
+    matches_data = load_matches()
+    match_row: dict[str, Any] | None = None
+    for row in matches_data:
+        try:
+            current_match_id = int(row.get("id", 0))
+        except (TypeError, ValueError):
+            continue
+        if current_match_id == match_id:
+            match_row = row
+            break
+    if match_row is None:
+        raise HTTPException(status_code=404, detail="Matchen hittades inte")
+
+    if (payload.home_goals is None) != (payload.away_goals is None):
+        raise HTTPException(status_code=400, detail="Fyll i bade hemma- och bortamal eller lamna bada tomma")
+
+    advancing_team = str(payload.advancing_team or "").strip()
+    if advancing_team:
+        home_team = str(match_row.get("home_team", "")).strip()
+        away_team = str(match_row.get("away_team", "")).strip()
+        if advancing_team not in {home_team, away_team}:
+            raise HTTPException(status_code=400, detail="Lag som gar vidare maste vara ett av lagen i matchen")
+
+    match_row["home_goals"] = payload.home_goals
+    match_row["away_goals"] = payload.away_goals
+    match_row["advancing_team"] = advancing_team or None
+    save_matches(matches_data)
+    return match_row
+
+
+@app.post("/admin/playoff-results")
+def admin_save_playoff_results(
+    payload: SavePlayoffPredictionsRequest,
+    _: dict[str, Any] = Depends(_require_admin),
+) -> dict[str, Any]:
+    normalized_rounds = _normalize_playoff_results(payload.rounds)
+    _save_playoff_results_rounds(normalized_rounds)
+    return _playoff_response(normalized_rounds)
 
 
 @app.get("/facit/me")

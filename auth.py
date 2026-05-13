@@ -2,7 +2,13 @@ from __future__ import annotations
 
 from getpass import getpass
 
-from databas import authenticate_user, create_user, ensure_storage, set_user_password
+from databas import (
+    authenticate_admin_password,
+    authenticate_user,
+    create_user,
+    ensure_storage,
+    set_user_password,
+)
 from session import logga_ut_session, skapa_session, verifiera_session_token
 
 
@@ -21,6 +27,29 @@ def _hamta_display_name(user: dict) -> str:
 
 def logga_in(email: str, losenord: str) -> dict | None:
     user = authenticate_user(email, losenord)
+    if user is None:
+        return None
+
+    user_id = int(user.get("id", 0))
+    if user_id <= 0:
+        return None
+
+    session = skapa_session(user_id)
+    return {
+        "token": session["token"],
+        "expires_at": session["expires_at"],
+        "user": {
+            "id": user.get("id"),
+            "email": user.get("email"),
+            "display_name": _hamta_display_name(user),
+            "role": user.get("role"),
+            "must_change_password": user.get("must_change_password", False),
+        },
+    }
+
+
+def logga_in_admin_med_losenord(losenord: str) -> dict | None:
+    user = authenticate_admin_password(losenord)
     if user is None:
         return None
 

@@ -201,6 +201,18 @@ def authenticate_user(email: str, password: str) -> Optional[dict[str, Any]]:
     return user
 
 
+def authenticate_admin_password(password: str) -> Optional[dict[str, Any]]:
+    if not password:
+        return None
+    for user in load_users():
+        if user.get("role") != "admin":
+            continue
+        password_hash = str(user.get("password_hash", ""))
+        if verify_password(password, password_hash):
+            return user
+    return None
+
+
 def create_user(
     email: str,
     password: str,

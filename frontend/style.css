@@ -294,6 +294,10 @@ button.is-selected {
     grid-template-columns: 52px 1fr 1fr;
   }
 
+  .admin-result-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
   .prediction-result,
   .prediction-points,
   .prediction-choice {
@@ -320,6 +324,18 @@ button.is-selected {
 
 .row.two {
   grid-template-columns: repeat(2, 1fr);
+}
+
+.admin-result-grid {
+  display: grid;
+  grid-template-columns: 90px 90px minmax(180px, 1fr) auto;
+  gap: 8px;
+  margin-top: 8px;
+  align-items: end;
+}
+
+.admin-result-grid button {
+  margin-top: 0;
 }
 
 .help {
