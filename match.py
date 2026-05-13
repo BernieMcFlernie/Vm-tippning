@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List, Optional, Protocol
+from typing import Dict, List, Optional, Protocol
 
 from databas import (
     ensure_storage,
     load_matches,
     load_players,
+    load_playoff_results,
     load_predictions,
     save_matches,
     save_players,
@@ -14,6 +15,8 @@ from databas import (
 )
 from oversikt import skriv_ut_matchlista, skriv_ut_slutspelstrad
 from tabell import skriv_ut_attondelstips, skriv_ut_tabell, skriv_ut_tippningar_for_match
+
+PLAYOFF_ROUNDS = ("sextondel", "attondel", "kvart", "semi", "final", "vinnare")
 
 
 @dataclass
@@ -95,6 +98,7 @@ class Spelare:
     name: str
     predictions: List[Prediction] = field(default_factory=list)
     attondels_lag: List[str] = field(default_factory=list)
+    slutspel_lag: Dict[str, List[str]] = field(default_factory=dict)
     points: float = 0.0
 
     def add_prediction(self, prediction: Prediction) -> None:
@@ -141,6 +145,7 @@ def rakna_tabell(matches: List[Match], players: List[Spelare]) -> None:
         player.points = 0.0
     for match in matches:
         dela_ut_poang_for_match(match, players)
+    dela_ut_poang_for_slutspel(hamta_slutspelsfacit(), players)
 
 
 def dela_ut_poang_for_attondelslista(correct_teams: List[str], players: List[Spelare]) -> None:
@@ -154,6 +159,38 @@ def dela_ut_poang_for_attondelslista(correct_teams: List[str], players: List[Spe
         points_per_player = len(players) / len(players_with_team)
         for player in players_with_team:
             player.points += points_per_player
+
+
+def dela_ut_poang_for_slutspel(correct_rounds: Dict[str, List[str]], players: List[Spelare]) -> None:
+    if not players:
+        return
+
+    for round_key in PLAYOFF_ROUNDS:
+        correct_teams = correct_rounds.get(round_key, [])
+        for team in correct_teams:
+            players_with_team = [
+                player
+                for player in players
+                if team in player.slutspel_lag.get(round_key, [])
+            ]
+            if not players_with_team:
+                continue
+            points_per_player = len(players) / len(players_with_team)
+            for player in players_with_team:
+                player.points += points_per_player
+
+
+def hamta_slutspelsfacit() -> Dict[str, List[str]]:
+    correct_rounds: Dict[str, List[str]] = {round_key: [] for round_key in PLAYOFF_ROUNDS}
+    for row in load_playoff_results():
+        round_key = str(row.get("round", "")).strip().lower()
+        if round_key not in correct_rounds:
+            continue
+        teams = row.get("teams", [])
+        if not isinstance(teams, list):
+            continue
+        correct_rounds[round_key] = [str(team).strip() for team in teams if str(team).strip()]
+    return correct_rounds
 
 
 def rakna_tabell_med_attondelslista(
@@ -190,6 +227,7 @@ def spara_till_json(matches: List[Match], players: List[Spelare]) -> None:
                 "name": player.name,
                 "points": player.points,
                 "attondels_lag": player.attondels_lag,
+                "slutspel_lag": player.slutspel_lag,
             }
         )
         for prediction in player.predictions:
@@ -256,6 +294,17 @@ def las_fran_json() -> tuple[List[Match], List[Spelare]]:
         attondels_lag = row.get("attondels_lag", [])
         if isinstance(attondels_lag, list):
             player.attondels_lag = [str(team) for team in attondels_lag]
+        slutspel_lag = row.get("slutspel_lag", {})
+        if isinstance(slutspel_lag, dict):
+            player.slutspel_lag = {
+                round_key: [
+                    str(team).strip()
+                    for team in slutspel_lag.get(round_key, [])
+                    if str(team).strip()
+                ]
+                for round_key in PLAYOFF_ROUNDS
+                if isinstance(slutspel_lag.get(round_key, []), list)
+            }
         players_by_id[player_id] = player
 
     for row in prediction_rows:

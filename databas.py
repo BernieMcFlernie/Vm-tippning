@@ -13,6 +13,7 @@ BASE_DIR = Path(__file__).parent
 DATA_DIR = BASE_DIR / "data"
 MATCHES_FILE = DATA_DIR / "matches.json"
 PREDICTIONS_FILE = DATA_DIR / "predictions.json"
+PLAYOFF_RESULTS_FILE = DATA_DIR / "playoff_results.json"
 PLAYERS_FILE = DATA_DIR / "players.json"
 USERS_FILE = DATA_DIR / "users.json"
 SESSIONS_FILE = DATA_DIR / "sessions.json"
@@ -78,6 +79,7 @@ def _ensure_files_exist() -> None:
     for file_path in (
         MATCHES_FILE,
         PREDICTIONS_FILE,
+        PLAYOFF_RESULTS_FILE,
         PLAYERS_FILE,
         USERS_FILE,
         SESSIONS_FILE,
@@ -132,6 +134,14 @@ def load_predictions() -> List[dict[str, Any]]:
 
 def save_predictions(rows: List[dict[str, Any]]) -> None:
     _write_json_array(PREDICTIONS_FILE, rows)
+
+
+def load_playoff_results() -> List[dict[str, Any]]:
+    return _read_json_array(PLAYOFF_RESULTS_FILE)
+
+
+def save_playoff_results(rows: List[dict[str, Any]]) -> None:
+    _write_json_array(PLAYOFF_RESULTS_FILE, rows)
 
 
 def load_players() -> List[dict[str, Any]]:

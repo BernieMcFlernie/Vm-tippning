@@ -7,10 +7,16 @@ const savePlayoffTeamsBtn = document.getElementById("savePlayoffTeamsBtn");
 
 const API_BASE_KEY = "vm_api_base";
 const TOKEN_KEY = "vm_token";
-const MAX_PLAYOFF_TEAM_BUTTONS = 48;
-const MAX_SELECTED_PLAYOFF_TEAMS = 4;
+const PLAYOFF_ROUNDS = [
+  { key: "sextondel", label: "Sextondelsfinal", limit: 32 },
+  { key: "attondel", label: "Attondelsfinal", limit: 16 },
+  { key: "kvart", label: "Kvartsfinal", limit: 8 },
+  { key: "semi", label: "Semifinal", limit: 4 },
+  { key: "final", label: "Final", limit: 2 },
+  { key: "vinnare", label: "Vinnare", limit: 1 },
+];
 
-let selectedPlayoffTeams = new Set();
+let selectedPlayoffRounds = createEmptyPlayoffRounds();
 
 function setStatus(message) {
   statusOutput.textContent = message;
@@ -99,55 +105,92 @@ function getUniqueTeams(matches) {
   return Array.from(teams).filter((team) => team).sort((a, b) => a.localeCompare(b, "sv"));
 }
 
+function createEmptyPlayoffRounds() {
+  return PLAYOFF_ROUNDS.reduce((rounds, round) => {
+    rounds[round.key] = [];
+    return rounds;
+  }, {});
+}
+
+function getRoundCandidates(roundIndex, matches) {
+  if (roundIndex === 0) {
+    return getUniqueTeams(matches);
+  }
+  return selectedPlayoffRounds[PLAYOFF_ROUNDS[roundIndex - 1].key] || [];
+}
+
+function pruneLaterPlayoffRounds(startIndex) {
+  for (let index = startIndex + 1; index < PLAYOFF_ROUNDS.length; index += 1) {
+    const previous = new Set(selectedPlayoffRounds[PLAYOFF_ROUNDS[index - 1].key] || []);
+    const round = PLAYOFF_ROUNDS[index];
+    selectedPlayoffRounds[round.key] = (selectedPlayoffRounds[round.key] || [])
+      .filter((team) => previous.has(team))
+      .slice(0, round.limit);
+  }
+}
+
 function renderPlayoffTeamPicker(matches) {
   playoffTeamsList.innerHTML = "";
-  const teams = getUniqueTeams(matches).slice(0, MAX_PLAYOFF_TEAM_BUTTONS);
-  if (teams.length === 0) {
+  if (!Array.isArray(matches) || matches.length === 0) {
     playoffTeamsList.textContent = "Inga lag hittades.";
     return;
   }
 
-  selectedPlayoffTeams = new Set(
-    Array.from(selectedPlayoffTeams)
-      .filter((team) => teams.includes(team))
-      .slice(0, MAX_SELECTED_PLAYOFF_TEAMS)
-  );
+  PLAYOFF_ROUNDS.forEach((round, index) => {
+    const candidates = getRoundCandidates(index, matches);
+    const selected = new Set(selectedPlayoffRounds[round.key] || []);
 
-  teams.forEach((team) => {
-    const teamBtn = document.createElement("button");
-    teamBtn.type = "button";
-    teamBtn.className = "team-pick-btn";
-    if (selectedPlayoffTeams.has(team)) {
-      teamBtn.classList.add("is-selected");
+    const section = document.createElement("section");
+    section.className = "playoff-round";
+
+    const heading = document.createElement("h3");
+    heading.textContent = `${round.label} (${selected.size}/${round.limit})`;
+    section.appendChild(heading);
+
+    const grid = document.createElement("div");
+    grid.className = "team-pick-grid";
+
+    if (candidates.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "help";
+      empty.textContent = index === 0 ? "Inga lag hittades." : "Valj lag i rundan innan forst.";
+      section.appendChild(empty);
+    } else {
+      candidates.forEach((team) => {
+        const teamBtn = document.createElement("button");
+        teamBtn.type = "button";
+        teamBtn.className = "team-pick-btn";
+        if (selected.has(team)) {
+          teamBtn.classList.add("is-selected");
+        }
+        teamBtn.textContent = team;
+        teamBtn.onclick = () => {
+          const currentTeams = selectedPlayoffRounds[round.key] || [];
+          const isSelected = currentTeams.includes(team);
+          if (isSelected) {
+            selectedPlayoffRounds[round.key] = currentTeams.filter((item) => item !== team);
+          } else if (currentTeams.length >= round.limit) {
+            setStatus(`${round.label} kan ha max ${round.limit} lag.`);
+            return;
+          } else {
+            selectedPlayoffRounds[round.key] = [...currentTeams, team];
+          }
+          pruneLaterPlayoffRounds(index);
+          renderPlayoffTeamPicker(matches);
+        };
+        grid.appendChild(teamBtn);
+      });
+      section.appendChild(grid);
     }
-    teamBtn.textContent = team;
-    teamBtn.onclick = () => {
-      const currentlySelected = selectedPlayoffTeams.has(team);
-      if (currentlySelected) {
-        selectedPlayoffTeams.delete(team);
-        teamBtn.classList.remove("is-selected");
-        return;
-      }
-      if (selectedPlayoffTeams.size >= MAX_SELECTED_PLAYOFF_TEAMS) {
-        setStatus("Du kan valja max 4 lag till slutspel.");
-        return;
-      }
-      selectedPlayoffTeams.add(team);
-      teamBtn.classList.add("is-selected");
-    };
-    playoffTeamsList.appendChild(teamBtn);
+
+    playoffTeamsList.appendChild(section);
   });
 }
 
 async function savePlayoffTeams() {
   try {
-    const teams = Array.from(selectedPlayoffTeams);
-    if (teams.length !== MAX_SELECTED_PLAYOFF_TEAMS) {
-      setStatus("Valj exakt 4 lag innan du sparar.");
-      return;
-    }
-    await api("/playoff-teams/me", "POST", { teams });
-    setStatus(`Slutspelsval sparat (${teams.length} lag).`);
+    await api("/playoff-predictions/me", "POST", { rounds: selectedPlayoffRounds });
+    setStatus("Slutspelstippning sparad.");
   } catch (error) {
     if (error.status === 401) {
       clearToken();
@@ -158,7 +201,7 @@ async function savePlayoffTeams() {
       setStatus("Kunde inte spara slutspelsval: ingen kontakt med API. Starta om backend och testa igen.");
       return;
     }
-    setStatus(`Kunde inte spara slutspelsval: ${error.message}`);
+    setStatus(`Kunde inte spara slutspelstippning: ${error.message}`);
   }
 }
 
@@ -268,9 +311,9 @@ async function loadMatches() {
       api("/predictions/me"),
     ]);
 
-    let playoffData = { teams: [] };
+    let playoffData = { rounds: createEmptyPlayoffRounds() };
     try {
-      playoffData = await api("/playoff-teams/me");
+      playoffData = await api("/playoff-predictions/me");
     } catch (error) {
       if (error.status === 401 || String(error.message || "").includes("401")) {
         clearToken();
@@ -279,7 +322,13 @@ async function loadMatches() {
       }
       setStatus(`Kunde inte hamta sparade slutspelsval: ${error.message}`);
     }
-    selectedPlayoffTeams = new Set(Array.isArray(playoffData.teams) ? playoffData.teams : []);
+    selectedPlayoffRounds = createEmptyPlayoffRounds();
+    PLAYOFF_ROUNDS.forEach((round) => {
+      const teams = playoffData.rounds && Array.isArray(playoffData.rounds[round.key])
+        ? playoffData.rounds[round.key]
+        : [];
+      selectedPlayoffRounds[round.key] = teams;
+    });
 
     const predictionsByMatchId = new Map();
     predictions.forEach((prediction) => {

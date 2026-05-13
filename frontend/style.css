@@ -335,6 +335,17 @@ button.is-selected {
   margin-bottom: 10px;
 }
 
+.playoff-round {
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  padding: 10px;
+}
+
+.playoff-round h3 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+}
+
 .team-pick-btn {
   margin-top: 0;
 }

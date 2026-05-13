@@ -14,7 +14,7 @@ from auth import (
     logga_ut,
     skapa_anvandare,
 )
-from match import las_fran_json, rakna_tabell
+from match import PLAYOFF_ROUNDS, las_fran_json, rakna_tabell
 from databas import (
     find_user_by_display_name,
     find_user_by_email,
@@ -68,6 +68,29 @@ class SavePlayoffTeamsRequest(BaseModel):
     teams: list[str] = Field(default_factory=list)
 
 
+class SavePlayoffPredictionsRequest(BaseModel):
+    rounds: dict[str, list[str]] = Field(default_factory=dict)
+
+
+PLAYOFF_ROUND_LIMITS = {
+    "sextondel": 32,
+    "attondel": 16,
+    "kvart": 8,
+    "semi": 4,
+    "final": 2,
+    "vinnare": 1,
+}
+
+PLAYOFF_ROUND_LABELS = {
+    "sextondel": "Sextondelsfinal",
+    "attondel": "Attondelsfinal",
+    "kvart": "Kvartsfinal",
+    "semi": "Semifinal",
+    "final": "Final",
+    "vinnare": "Vinnare",
+}
+
+
 def _extract_token(credentials: HTTPAuthorizationCredentials | None) -> str:
     if credentials is None:
         raise HTTPException(status_code=401, detail="Missing Authorization header")
@@ -113,7 +136,13 @@ def _hamta_eller_skapa_player_id(user: dict[str, Any]) -> int:
         except (TypeError, ValueError):
             continue
 
-    new_player = {"id": next_player_id, "name": user_display_name, "points": 0.0, "attondels_lag": []}
+    new_player = {
+        "id": next_player_id,
+        "name": user_display_name,
+        "points": 0.0,
+        "attondels_lag": [],
+        "slutspel_lag": {},
+    }
     players_data.append(new_player)
     save_players(players_data)
     return next_player_id
@@ -149,6 +178,86 @@ def _spara_prediction(player_id: int, match_id: int, prediction: dict[str, Any])
     predictions_data.append(new_prediction)
     save_predictions(predictions_data)
     return new_prediction
+
+
+def _valid_playoff_teams() -> set[str]:
+    teams: set[str] = set()
+    for row in load_matches():
+        home_team = str(row.get("home_team", "")).strip()
+        away_team = str(row.get("away_team", "")).strip()
+        if home_team:
+            teams.add(home_team)
+        if away_team:
+            teams.add(away_team)
+    return teams
+
+
+def _empty_playoff_rounds() -> dict[str, list[str]]:
+    return {round_key: [] for round_key in PLAYOFF_ROUNDS}
+
+
+def _normalize_playoff_rounds(raw_rounds: dict[str, Any]) -> dict[str, list[str]]:
+    valid_teams = _valid_playoff_teams()
+    normalized_rounds = _empty_playoff_rounds()
+    previous_allowed = valid_teams
+
+    for round_key in PLAYOFF_ROUNDS:
+        raw_teams = raw_rounds.get(round_key, [])
+        if not isinstance(raw_teams, list):
+            raise HTTPException(status_code=400, detail=f"{round_key} maste vara en lista")
+
+        unique_teams: list[str] = []
+        seen: set[str] = set()
+        for team in raw_teams:
+            normalized = str(team).strip()
+            if not normalized:
+                continue
+            lowered = normalized.lower()
+            if lowered in seen:
+                continue
+            if normalized not in valid_teams:
+                raise HTTPException(status_code=400, detail=f"Ogiltigt lag: {normalized}")
+            if normalized not in previous_allowed:
+                label = PLAYOFF_ROUND_LABELS.get(round_key, round_key)
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"{normalized} kan inte valjas i {label} utan att vara valt i rundan innan",
+                )
+            seen.add(lowered)
+            unique_teams.append(normalized)
+
+        limit = PLAYOFF_ROUND_LIMITS[round_key]
+        if len(unique_teams) > limit:
+            label = PLAYOFF_ROUND_LABELS.get(round_key, round_key)
+            raise HTTPException(status_code=400, detail=f"{label} kan ha max {limit} lag")
+
+        normalized_rounds[round_key] = unique_teams
+        previous_allowed = set(unique_teams)
+
+    return normalized_rounds
+
+
+def _playoff_rounds_from_player(row: dict[str, Any]) -> dict[str, list[str]]:
+    rounds = _empty_playoff_rounds()
+    saved_rounds = row.get("slutspel_lag", {})
+    if isinstance(saved_rounds, dict):
+        for round_key in PLAYOFF_ROUNDS:
+            teams = saved_rounds.get(round_key, [])
+            if isinstance(teams, list):
+                rounds[round_key] = [str(team).strip() for team in teams if str(team).strip()]
+    old_attondel = row.get("attondels_lag", [])
+    if not rounds["attondel"] and isinstance(old_attondel, list):
+        rounds["attondel"] = [str(team).strip() for team in old_attondel if str(team).strip()]
+    return rounds
+
+
+def _playoff_response(rounds: dict[str, list[str]]) -> dict[str, Any]:
+    return {
+        "rounds": rounds,
+        "limits": PLAYOFF_ROUND_LIMITS,
+        "labels": PLAYOFF_ROUND_LABELS,
+        "order": list(PLAYOFF_ROUNDS),
+    }
 
 
 @app.get("/health")
@@ -370,6 +479,7 @@ def predictions_for_player(
             for team in player_row.get("attondels_lag", [])
             if str(team).strip()
         ] if isinstance(player_row.get("attondels_lag", []), list) else [],
+        "playoff_predictions": _playoff_rounds_from_player(player_row),
         "predictions": rows,
     }
 
@@ -399,39 +509,30 @@ def my_playoff_teams(user: dict[str, Any] = Depends(_require_user)) -> dict[str,
     return {"teams": [str(team).strip() for team in teams if str(team).strip()]}
 
 
-@app.post("/playoff-teams/me")
-def save_playoff_teams(
-    payload: SavePlayoffTeamsRequest,
+@app.get("/playoff-predictions/me")
+def my_playoff_predictions(user: dict[str, Any] = Depends(_require_user)) -> dict[str, Any]:
+    player_id = _hamta_player_id(user)
+    if player_id is None:
+        return _playoff_response(_empty_playoff_rounds())
+
+    for row in load_players():
+        try:
+            current_id = int(row.get("id", 0))
+        except (TypeError, ValueError):
+            continue
+        if current_id == player_id:
+            return _playoff_response(_playoff_rounds_from_player(row))
+
+    return _playoff_response(_empty_playoff_rounds())
+
+
+@app.post("/playoff-predictions/me")
+def save_playoff_predictions(
+    payload: SavePlayoffPredictionsRequest,
     user: dict[str, Any] = Depends(_require_user),
-) -> dict[str, list[str]]:
+) -> dict[str, Any]:
     player_id = _hamta_eller_skapa_player_id(user)
-    unique_teams: list[str] = []
-    seen: set[str] = set()
-    for team in payload.teams:
-        normalized = str(team).strip()
-        if not normalized:
-            continue
-        lowered = normalized.lower()
-        if lowered in seen:
-            continue
-        seen.add(lowered)
-        unique_teams.append(normalized)
-
-    matches_data = load_matches()
-    valid_teams: set[str] = set()
-    for row in matches_data:
-        home_team = str(row.get("home_team", "")).strip()
-        away_team = str(row.get("away_team", "")).strip()
-        if home_team:
-            valid_teams.add(home_team)
-        if away_team:
-            valid_teams.add(away_team)
-
-    invalid_teams = [team for team in unique_teams if team not in valid_teams]
-    if invalid_teams:
-        raise HTTPException(status_code=400, detail=f"Ogiltiga lag: {', '.join(invalid_teams)}")
-    if len(unique_teams) > 4:
-        raise HTTPException(status_code=400, detail="Du kan valja max 4 lag till slutspel")
+    normalized_rounds = _normalize_playoff_rounds(payload.rounds)
 
     players_data = load_players()
     updated = False
@@ -442,7 +543,8 @@ def save_playoff_teams(
             continue
         if current_player_id != player_id:
             continue
-        row["attondels_lag"] = unique_teams
+        row["slutspel_lag"] = normalized_rounds
+        row["attondels_lag"] = normalized_rounds.get("attondel", [])
         updated = True
         break
 
@@ -450,7 +552,19 @@ def save_playoff_teams(
         raise HTTPException(status_code=404, detail="Spelaren hittades inte")
 
     save_players(players_data)
-    return {"teams": unique_teams}
+    return _playoff_response(normalized_rounds)
+
+
+@app.post("/playoff-teams/me")
+def save_playoff_teams(
+    payload: SavePlayoffTeamsRequest,
+    user: dict[str, Any] = Depends(_require_user),
+) -> dict[str, list[str]]:
+    rounds = _empty_playoff_rounds()
+    rounds["sextondel"] = payload.teams
+    rounds["attondel"] = payload.teams
+    saved = save_playoff_predictions(SavePlayoffPredictionsRequest(rounds=rounds), user)
+    return {"teams": saved["rounds"].get("attondel", [])}
 
 
 @app.get("/facit/me")
@@ -663,6 +777,7 @@ def players(_: dict[str, Any] = Depends(_require_user)) -> list[dict[str, Any]]:
             "name": player.name,
             "points": player.points,
             "attondels_lag": player.attondels_lag,
+            "slutspel_lag": player.slutspel_lag,
         }
         for index, player in enumerate(players_data, start=1)
     ]

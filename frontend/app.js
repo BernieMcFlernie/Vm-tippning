@@ -122,12 +122,23 @@ function renderPredictionRow(row) {
 function renderPlayerPredictions(container, data) {
   container.innerHTML = "";
 
-  const playoffTeams = Array.isArray(data.playoff_teams) ? data.playoff_teams : [];
+  const playoffPredictions = data.playoff_predictions || {};
+  const playoffSummary = [
+    ["sextondel", "Sextondel"],
+    ["attondel", "Attondel"],
+    ["kvart", "Kvart"],
+    ["semi", "Semi"],
+    ["final", "Final"],
+    ["vinnare", "Vinnare"],
+  ]
+    .map(([key, label]) => {
+      const teams = Array.isArray(playoffPredictions[key]) ? playoffPredictions[key] : [];
+      return `${label}: ${teams.length ? teams.join(", ") : "-"}`;
+    })
+    .join(" | ");
   const playoffBox = document.createElement("div");
   playoffBox.className = "prediction-summary";
-  playoffBox.textContent = playoffTeams.length
-    ? `Slutspelsval: ${playoffTeams.join(", ")}`
-    : "Slutspelsval: inga sparade val";
+  playoffBox.textContent = `Slutspel: ${playoffSummary}`;
   container.appendChild(playoffBox);
 
   const list = document.createElement("div");
