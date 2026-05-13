@@ -17,6 +17,12 @@ const PLAYOFF_ROUNDS = [
 ];
 
 let selectedPlayoffRounds = createEmptyPlayoffRounds();
+let predictionStatus = {
+  deadline: "2026-06-11T00:00:00",
+  locked: false,
+  can_edit: true,
+  can_view_others: false,
+};
 
 function setStatus(message) {
   statusOutput.textContent = message;
@@ -32,6 +38,20 @@ function getToken() {
 
 function clearToken() {
   localStorage.removeItem(TOKEN_KEY);
+}
+
+function formatDeadline(deadline) {
+  const date = new Date(deadline);
+  if (Number.isNaN(date.getTime())) {
+    return "2026-06-11 00:00";
+  }
+  return date.toLocaleString("sv-SE", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 async function api(path, method = "GET", body = undefined) {
@@ -89,6 +109,10 @@ function isSelectedAway(prediction, awayTeam) {
 }
 
 async function saveGroupPrediction(matchId, outcome) {
+  if (predictionStatus.locked) {
+    setStatus("Tippningen ar last och kan inte andras.");
+    return;
+  }
   await api("/predictions/gruppspel", "POST", {
     match_id: matchId,
     predicted_outcome: outcome,
@@ -131,6 +155,7 @@ function pruneLaterPlayoffRounds(startIndex) {
 
 function renderPlayoffTeamPicker(matches) {
   playoffTeamsList.innerHTML = "";
+  const locked = Boolean(predictionStatus.locked);
   if (!Array.isArray(matches) || matches.length === 0) {
     playoffTeamsList.textContent = "Inga lag hittades.";
     return;
@@ -163,8 +188,16 @@ function renderPlayoffTeamPicker(matches) {
         if (selected.has(team)) {
           teamBtn.classList.add("is-selected");
         }
+        teamBtn.disabled = locked;
+        if (locked) {
+          teamBtn.title = "Tippningen ar last.";
+        }
         teamBtn.textContent = team;
         teamBtn.onclick = () => {
+          if (locked) {
+            setStatus("Tippningen ar last och kan inte andras.");
+            return;
+          }
           const currentTeams = selectedPlayoffRounds[round.key] || [];
           const isSelected = currentTeams.includes(team);
           if (isSelected) {
@@ -188,6 +221,10 @@ function renderPlayoffTeamPicker(matches) {
 }
 
 async function savePlayoffTeams() {
+  if (predictionStatus.locked) {
+    setStatus("Tippningen ar last och kan inte andras.");
+    return;
+  }
   try {
     await api("/playoff-predictions/me", "POST", { rounds: selectedPlayoffRounds });
     setStatus("Slutspelstippning sparad.");
@@ -223,6 +260,7 @@ function renderMatch(match, prediction) {
   const homeBtn = document.createElement("button");
   homeBtn.type = "button";
   homeBtn.textContent = match.home_team;
+  homeBtn.disabled = Boolean(predictionStatus.locked);
   if (isSelectedHome(prediction, match.home_team)) {
     homeBtn.classList.add("is-selected");
   }
@@ -238,6 +276,7 @@ function renderMatch(match, prediction) {
   const drawBtn = document.createElement("button");
   drawBtn.type = "button";
   drawBtn.textContent = "Kryss";
+  drawBtn.disabled = Boolean(predictionStatus.locked);
   if (isSelectedGroup(prediction, "kryss")) {
     drawBtn.classList.add("is-selected");
   }
@@ -253,6 +292,7 @@ function renderMatch(match, prediction) {
   const awayBtn = document.createElement("button");
   awayBtn.type = "button";
   awayBtn.textContent = match.away_team;
+  awayBtn.disabled = Boolean(predictionStatus.locked);
   if (isSelectedAway(prediction, match.away_team)) {
     awayBtn.classList.add("is-selected");
   }
@@ -306,10 +346,18 @@ function groupMatches(matches) {
 async function loadMatches() {
   matchesList.innerHTML = "";
   try {
-    const [matches, predictions] = await Promise.all([
+    const [matches, predictions, status] = await Promise.all([
       api("/matches"),
       api("/predictions/me"),
+      api("/predictions/status"),
     ]);
+    predictionStatus = status;
+    savePlayoffTeamsBtn.disabled = Boolean(predictionStatus.locked);
+    setStatus(
+      predictionStatus.locked
+        ? `Tippningen ar last sedan ${formatDeadline(predictionStatus.deadline)}.`
+        : `Tippningen laser ${formatDeadline(predictionStatus.deadline)}.`
+    );
 
     let playoffData = { rounds: createEmptyPlayoffRounds() };
     try {

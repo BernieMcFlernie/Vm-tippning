@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -41,6 +42,7 @@ app.add_middleware(
 )
 security = HTTPBearer(auto_error=False)
 FRONTEND_DIR = Path(__file__).resolve().parent / "frontend"
+TIPPNINGS_DEADLINE = datetime(2026, 6, 11, 0, 0, 0)
 
 
 class LoginRequest(BaseModel):
@@ -130,6 +132,26 @@ def _require_admin(credentials: HTTPAuthorizationCredentials | None = Depends(se
     if user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin behorighet kravs")
     return user
+
+
+def _tippningar_are_locked(now: datetime | None = None) -> bool:
+    return (now or datetime.now()) >= TIPPNINGS_DEADLINE
+
+
+def _require_predictions_open() -> None:
+    if _tippningar_are_locked():
+        raise HTTPException(
+            status_code=403,
+            detail="Tippningarna ar lasta och kan inte andras efter deadline.",
+        )
+
+
+def _require_predictions_visible() -> None:
+    if not _tippningar_are_locked():
+        raise HTTPException(
+            status_code=403,
+            detail="Andras tippningar kan inte visas fore deadline.",
+        )
 
 
 def _hamta_match(match_id: int) -> dict[str, Any]:
@@ -311,6 +333,17 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/predictions/status")
+def predictions_status(_: dict[str, Any] = Depends(_require_user)) -> dict[str, Any]:
+    locked = _tippningar_are_locked()
+    return {
+        "deadline": TIPPNINGS_DEADLINE.isoformat(),
+        "locked": locked,
+        "can_edit": not locked,
+        "can_view_others": locked,
+    }
+
+
 @app.post("/login")
 def login(payload: LoginRequest) -> dict[str, Any]:
     result = logga_in(payload.email, payload.password)
@@ -391,6 +424,7 @@ def create_group_prediction(
     payload: CreateGroupPredictionRequest,
     user: dict[str, Any] = Depends(_require_user),
 ) -> dict[str, Any]:
+    _require_predictions_open()
     _hamta_match(payload.match_id)
     player_id = _hamta_eller_skapa_player_id(user)
     predicted_outcome = payload.predicted_outcome.strip().lower()
@@ -411,6 +445,7 @@ def create_playoff_prediction(
     payload: CreatePlayoffPredictionRequest,
     user: dict[str, Any] = Depends(_require_user),
 ) -> dict[str, Any]:
+    _require_predictions_open()
     match_row = _hamta_match(payload.match_id)
     player_id = _hamta_eller_skapa_player_id(user)
     predicted_team = payload.predicted_team.strip()
@@ -452,6 +487,7 @@ def predictions_for_player(
     player_id: int,
     _: dict[str, Any] = Depends(_require_user),
 ) -> dict[str, Any]:
+    _require_predictions_visible()
     players_data = load_players()
     player_row: dict[str, Any] | None = None
     for row in players_data:
@@ -585,6 +621,7 @@ def save_playoff_predictions(
     payload: SavePlayoffPredictionsRequest,
     user: dict[str, Any] = Depends(_require_user),
 ) -> dict[str, Any]:
+    _require_predictions_open()
     player_id = _hamta_eller_skapa_player_id(user)
     normalized_rounds = _normalize_playoff_rounds(payload.rounds)
 
@@ -614,6 +651,7 @@ def save_playoff_teams(
     payload: SavePlayoffTeamsRequest,
     user: dict[str, Any] = Depends(_require_user),
 ) -> dict[str, list[str]]:
+    _require_predictions_open()
     rounds = _empty_playoff_rounds()
     rounds["sextondel"] = payload.teams
     rounds["attondel"] = payload.teams
@@ -769,6 +807,7 @@ def predictions_for_match(
     match_id: int,
     _: dict[str, Any] = Depends(_require_user),
 ) -> list[dict[str, Any]]:
+    _require_predictions_visible()
     match_row = _hamta_match(match_id)
     home_team = str(match_row.get("home_team", "")).strip()
     away_team = str(match_row.get("away_team", "")).strip()
