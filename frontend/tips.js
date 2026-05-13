@@ -7,7 +7,7 @@ const savePlayoffTeamsBtn = document.getElementById("savePlayoffTeamsBtn");
 
 const API_BASE_KEY = "vm_api_base";
 const TOKEN_KEY = "vm_token";
-const MAX_PLAYOFF_TEAM_BUTTONS = 8;
+const MAX_PLAYOFF_TEAM_BUTTONS = 48;
 const MAX_SELECTED_PLAYOFF_TEAMS = 4;
 
 let selectedPlayoffTeams = new Set();
@@ -231,6 +231,35 @@ function renderMatch(match, prediction) {
   return item;
 }
 
+function renderGroupSection(title, matches, predictionsByMatchId) {
+  const section = document.createElement("section");
+  section.className = "stack";
+
+  const heading = document.createElement("h3");
+  heading.textContent = title;
+  section.appendChild(heading);
+
+  matches.forEach((match) => {
+    const prediction = predictionsByMatchId.get(Number(match.id));
+    section.appendChild(renderMatch(match, prediction));
+  });
+
+  return section;
+}
+
+function groupMatches(matches) {
+  const groupNames = "ABCDEFGHIJKL".split("");
+  const groups = [];
+  for (let index = 0; index < matches.length; index += 6) {
+    const groupIndex = Math.floor(index / 6);
+    groups.push({
+      title: `Grupp ${groupNames[groupIndex] || groupIndex + 1}`,
+      matches: matches.slice(index, index + 6),
+    });
+  }
+  return groups;
+}
+
 async function loadMatches() {
   matchesList.innerHTML = "";
   try {
@@ -263,9 +292,8 @@ async function loadMatches() {
       return;
     }
 
-    matches.forEach((match) => {
-      const prediction = predictionsByMatchId.get(Number(match.id));
-      matchesList.appendChild(renderMatch(match, prediction));
+    groupMatches(matches).forEach((group) => {
+      matchesList.appendChild(renderGroupSection(group.title, group.matches, predictionsByMatchId));
     });
 
     renderPlayoffTeamPicker(matches);

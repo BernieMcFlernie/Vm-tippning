@@ -151,6 +151,19 @@ function renderGroupSection(title, matches) {
   return section;
 }
 
+function groupMatches(matches) {
+  const groupNames = "ABCDEFGHIJKL".split("");
+  const groups = [];
+  for (let index = 0; index < matches.length; index += 6) {
+    const groupIndex = Math.floor(index / 6);
+    groups.push({
+      title: `Grupp ${groupNames[groupIndex] || groupIndex + 1}`,
+      matches: matches.slice(index, index + 6),
+    });
+  }
+  return groups;
+}
+
 async function loadMatches() {
   matchesList.innerHTML = "";
   try {
@@ -159,15 +172,9 @@ async function loadMatches() {
       matchesList.textContent = "Inga matcher hittades.";
       return;
     }
-    const groupOne = matches.filter((match) => Number(match.id) >= 1 && Number(match.id) <= 6);
-    const groupTwo = matches.filter((match) => Number(match.id) >= 7 && Number(match.id) <= 12);
-
-    if (groupOne.length > 0) {
-      matchesList.appendChild(renderGroupSection("Grupp 1", groupOne));
-    }
-    if (groupTwo.length > 0) {
-      matchesList.appendChild(renderGroupSection("Grupp 2", groupTwo));
-    }
+    groupMatches(matches).forEach((group) => {
+      matchesList.appendChild(renderGroupSection(group.title, group.matches));
+    });
   } catch (error) {
     if (error.status === 401) {
       clearToken();
