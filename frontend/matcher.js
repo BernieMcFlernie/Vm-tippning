@@ -11,7 +11,7 @@ function setStatus(message) {
 }
 
 function getApiBase() {
-  return (localStorage.getItem(API_BASE_KEY) || "http://127.0.0.1:8000").replace(/\/+$/, "");
+  return (localStorage.getItem(API_BASE_KEY) || window.location.origin).replace(/\/+$/, "");
 }
 
 function getToken() {

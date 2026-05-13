@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from auth import (
@@ -38,6 +40,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 security = HTTPBearer(auto_error=False)
+FRONTEND_DIR = Path(__file__).resolve().parent / "frontend"
 
 
 class LoginRequest(BaseModel):
@@ -908,3 +911,7 @@ def table(_: dict[str, Any] = Depends(_require_user)) -> list[dict[str, Any]]:
         }
         for position, (player_id, player) in enumerate(sorted_players_with_ids, start=1)
     ]
+
+
+if FRONTEND_DIR.exists():
+    app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
