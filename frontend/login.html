@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VM Tippning - Login</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <main class="page auth-page">
+    <header class="hero">
+      <h1>VM Tippning</h1>
+      <p>Logga in for att komma till hemsidan.</p>
+    </header>
+
+    <section class="card auth-card">
+      <h2>Logga In</h2>
+      <form id="loginForm">
+        <label for="loginEmail">E-post</label>
+        <input id="loginEmail" type="email" required>
+
+        <label for="loginPassword">Losenord</label>
+        <input id="loginPassword" type="password" required>
+
+        <button type="submit">Logga in</button>
+      </form>
+
+      <div class="link-row">
+        <a class="link-btn" href="./register.html">Skapa konto</a>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>API</h2>
+      <label for="apiBase">API Base URL</label>
+      <input id="apiBase" type="text" value="http://127.0.0.1:8000">
+      <button id="saveApiBaseBtn" type="button">Spara URL</button>
+    </section>
+
+    <section class="card">
+      <h2>Status</h2>
+      <pre id="statusOutput">Klar.</pre>
+    </section>
+  </main>
+
+  <script src="./login.js"></script>
+</body>
+</html>

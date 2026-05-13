@@ -1,0 +1,98 @@
+[
+    {
+        "id":  1,
+        "home_team":  "Sverige",
+        "away_team":  "Tyskland",
+        "home_goals":  2,
+        "away_goals":  1,
+        "advancing_team":  null
+    },
+    {
+        "id":  2,
+        "home_team":  "Sverige",
+        "away_team":  "Frankrike",
+        "home_goals":  1,
+        "away_goals":  1,
+        "advancing_team":  null
+    },
+    {
+        "id":  3,
+        "home_team":  "Sverige",
+        "away_team":  "Danmark",
+        "home_goals":  0,
+        "away_goals":  1,
+        "advancing_team":  null
+    },
+    {
+        "id":  4,
+        "home_team":  "Tyskland",
+        "away_team":  "Frankrike",
+        "home_goals":  3,
+        "away_goals":  2,
+        "advancing_team":  null
+    },
+    {
+        "id":  5,
+        "home_team":  "Tyskland",
+        "away_team":  "Danmark",
+        "home_goals":  null,
+        "away_goals":  null,
+        "advancing_team":  null
+    },
+    {
+        "id":  6,
+        "home_team":  "Frankrike",
+        "away_team":  "Danmark",
+        "home_goals":  null,
+        "away_goals":  null,
+        "advancing_team":  null
+    },
+    {
+        "id":  7,
+        "home_team":  "England",
+        "away_team":  "Spanien",
+        "home_goals":  1,
+        "away_goals":  0,
+        "advancing_team":  null
+    },
+    {
+        "id":  8,
+        "home_team":  "England",
+        "away_team":  "Brasilien",
+        "home_goals":  2,
+        "away_goals":  2,
+        "advancing_team":  null
+    },
+    {
+        "id":  9,
+        "home_team":  "England",
+        "away_team":  "Portugal",
+        "home_goals":  2,
+        "away_goals":  1,
+        "advancing_team":  null
+    },
+    {
+        "id":  10,
+        "home_team":  "Spanien",
+        "away_team":  "Brasilien",
+        "home_goals":  1,
+        "away_goals":  1,
+        "advancing_team":  null
+    },
+    {
+        "id":  11,
+        "home_team":  "Spanien",
+        "away_team":  "Portugal",
+        "home_goals":  null,
+        "away_goals":  null,
+        "advancing_team":  null
+    },
+    {
+        "id":  12,
+        "home_team":  "Brasilien",
+        "away_team":  "Portugal",
+        "home_goals":  null,
+        "away_goals":  null,
+        "advancing_team":  null
+    }
+]

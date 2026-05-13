@@ -1,0 +1,45 @@
+﻿<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VM Tippning - Tippa</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <main class="page">
+    <header class="hero">
+      <div class="hero-copy">
+        <h1>Tippning</h1>
+        <p>Valj utfall eller lag. Din senaste tippning markeras.</p>
+      </div>
+      <button id="logoutBtn" type="button" class="logout-corner">Logga ut</button>
+    </header>
+
+    <section class="card">
+      <a class="link-btn" href="./index.html">Till startsidan</a>
+    </section>
+
+    <section class="card">
+      <h2>Matcher</h2>
+      <p class="help">Valj <code>hemmalag</code>, <code>kryss</code> eller <code>bortalag</code>.</p>
+      <button id="refreshMatchesBtn" type="button">Hamta matcher</button>
+      <div id="matchesList" class="stack"></div>
+    </section>
+
+    <section class="card">
+      <h2>Val till slutspel</h2>
+      <p class="help">Valj lag via 8 knappar. Du kan markera max 4 lag.</p>
+      <div id="playoffTeamsList" class="team-pick-grid"></div>
+      <button id="savePlayoffTeamsBtn" type="button">Spara val till slutspel</button>
+    </section>
+
+    <section class="card">
+      <h2>Status</h2>
+      <pre id="statusOutput">Klar.</pre>
+    </section>
+  </main>
+
+  <script src="./tips.js"></script>
+</body>
+</html>

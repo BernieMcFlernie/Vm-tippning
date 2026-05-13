@@ -1,0 +1,38 @@
+﻿<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VM Tippning - Alla matcher</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <main class="page">
+    <header class="hero">
+      <div class="hero-copy">
+        <h1>Alla matcher</h1>
+        <p>Lista over samtliga matcher och resultat nar de ar inlagda.</p>
+      </div>
+      <button id="logoutBtn" type="button" class="logout-corner">Logga ut</button>
+    </header>
+
+    <section class="card">
+      <a class="link-btn" href="./index.html">Till startsidan</a>
+    </section>
+
+    <section class="card">
+      <h2>Matcher och resultat</h2>
+      <p class="help">Klicka pa en match for att visa alla tippningar.</p>
+      <button id="refreshMatchesBtn" type="button">Hamta matcher</button>
+      <div id="matchesList" class="stack"></div>
+    </section>
+
+    <section class="card">
+      <h2>Status</h2>
+      <pre id="statusOutput">Klar.</pre>
+    </section>
+  </main>
+
+  <script src="./matcher.js"></script>
+</body>
+</html>

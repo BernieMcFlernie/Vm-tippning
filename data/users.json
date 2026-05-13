@@ -1,0 +1,26 @@
+[
+  {
+    "id": 1,
+    "email": "admin@vm.local",
+    "display_name": "admin",
+    "password_hash": "pbkdf2_sha256$100000$lje6798xyNt7vqePJtTtfQ==$qvXoQpm8EjVGLkUeIhrPqqfWKdymgJvnhSbT3DBjIoU=",
+    "role": "admin",
+    "must_change_password": false
+  },
+  {
+    "id": 2,
+    "email": "bernard@raljak.se",
+    "display_name": "Bernie",
+    "password_hash": "pbkdf2_sha256$100000$JWuK0db53m2MtNShju7pTQ==$ec5v+c5SWAhLnLeVe7rGjC4O6iJdDYlStHwjBBoFXK4=",
+    "role": "user",
+    "must_change_password": false
+  },
+  {
+    "id": 3,
+    "email": "nina@vaxjonexus.com",
+    "display_name": "Nina",
+    "password_hash": "pbkdf2_sha256$100000$PG4LoWBw7KAoTDuWP3MzVQ==$d7L+8TCIt1uEz7vb1v/1yornih6mvxrg4s7Z5Ct7IHo=",
+    "role": "user",
+    "must_change_password": false
+  }
+]

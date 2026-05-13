@@ -1,0 +1,48 @@
+﻿<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VM Tippning - Hemsida</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <main class="page">
+    <header class="hero">
+      <div class="hero-copy">
+        <h1>VM Tippning</h1>
+        <p>Tippa matcher och folj tabellen.</p>
+      </div>
+      <button id="logoutBtn" type="button" class="logout-corner">Logga ut</button>
+    </header>
+
+    <section class="card">
+      <h2>Din Profil</h2>
+      <pre id="meOutput">Hej!</pre>
+    </section>
+
+    <section class="action-links">
+      <h2>Tippning</h2>
+      <p class="help">Gor dina tips pa en separat sida.</p>
+      <div class="action-links-row">
+        <a class="link-btn" href="./tips.html">Ga till tippning</a>
+        <a class="link-btn" href="./facit.html">Ga till facit</a>
+        <a class="link-btn" href="./matcher.html">Ga till matcher</a>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Tabell</h2>
+      <button id="refreshTableBtn" type="button">Hamta tabell</button>
+      <div id="tableList" class="stack"></div>
+    </section>
+
+    <section class="card">
+      <h2>Status</h2>
+      <pre id="statusOutput">Klar.</pre>
+    </section>
+  </main>
+
+  <script src="./app.js"></script>
+</body>
+</html>

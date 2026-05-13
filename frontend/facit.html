@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VM Tippning - Facit</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <main class="page">
+    <header class="hero">
+      <div class="hero-copy">
+        <h1>Facit</h1>
+        <p>Se facit och hur manga poang du fick per match.</p>
+      </div>
+      <button id="logoutBtn" type="button" class="logout-corner">Logga ut</button>
+    </header>
+
+    <section class="card">
+      <a class="link-btn" href="./index.html">Till startsidan</a>
+    </section>
+
+    <section class="card">
+      <h2>Ditt Facit</h2>
+      <div id="facitList" class="stack"></div>
+    </section>
+
+    <section class="card">
+      <h2>Status</h2>
+      <pre id="statusOutput">Klar.</pre>
+    </section>
+  </main>
+
+  <script src="./facit.js"></script>
+</body>
+</html>

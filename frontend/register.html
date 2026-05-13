@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VM Tippning - Skapa Konto</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <main class="page auth-page">
+    <header class="hero">
+      <h1>Skapa Konto</h1>
+      <p>Skapa konto och ga sedan till login.</p>
+    </header>
+
+    <section class="card auth-card">
+      <h2>Registrering</h2>
+      <form id="registerForm">
+        <label for="registerEmail">E-post</label>
+        <input id="registerEmail" type="email" required>
+
+        <label for="registerDisplayName">Displaynamn</label>
+        <input id="registerDisplayName" type="text" minlength="2" required>
+
+        <label for="registerPassword">Losenord</label>
+        <input id="registerPassword" type="password" required>
+
+        <button type="submit">Skapa konto</button>
+      </form>
+
+      <div class="link-row">
+        <a class="link-btn" href="./login.html">Till login</a>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>API</h2>
+      <label for="apiBase">API Base URL</label>
+      <input id="apiBase" type="text" value="http://127.0.0.1:8000">
+      <button id="saveApiBaseBtn" type="button">Spara URL</button>
+    </section>
+
+    <section class="card">
+      <h2>Status</h2>
+      <pre id="statusOutput">Klar.</pre>
+    </section>
+  </main>
+
+  <script src="./register.js"></script>
+</body>
+</html>
