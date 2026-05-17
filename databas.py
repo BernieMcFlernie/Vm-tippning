@@ -20,6 +20,20 @@ SESSIONS_FILE = DATA_DIR / "sessions.json"
 
 DEFAULT_ADMIN_EMAIL = "admin@vm.local"
 DEFAULT_ADMIN_PASSWORD = "changeme"
+DEFAULT_LEAGUE = "slakten"
+LEAGUES = {
+    "slakten": "Släkten",
+    "lidingo": "Lidingö",
+}
+
+
+def normalize_league(value: Any) -> str:
+    league = str(value or "").strip().lower()
+    if league == "laget":
+        return "lidingo"
+    if league in LEAGUES:
+        return league
+    return DEFAULT_LEAGUE
 
 
 def _hash_password(password: str, salt: bytes | None = None) -> str:
@@ -69,6 +83,7 @@ def _bootstrap_admin_user_if_needed() -> None:
             "password_hash": _hash_password(admin_password),
             "role": "admin",
             "must_change_password": admin_password == DEFAULT_ADMIN_PASSWORD,
+            "league": DEFAULT_LEAGUE,
         }
     ]
     _write_json_array(USERS_FILE, users)
@@ -219,6 +234,7 @@ def create_user(
     display_name: str,
     role: str = "user",
     must_change_password: bool = False,
+    league: str = DEFAULT_LEAGUE,
 ) -> Optional[dict[str, Any]]:
     normalized_email = email.strip().lower()
     normalized_display_name = display_name.strip()
@@ -249,6 +265,7 @@ def create_user(
         "password_hash": hash_password(password),
         "role": role,
         "must_change_password": bool(must_change_password),
+        "league": normalize_league(league),
     }
     users.append(created_user)
     save_users(users)

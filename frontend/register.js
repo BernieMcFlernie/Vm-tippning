@@ -2,6 +2,8 @@ const registerForm = document.getElementById("registerForm");
 const apiBaseInput = document.getElementById("apiBase");
 const saveApiBaseBtn = document.getElementById("saveApiBaseBtn");
 const statusOutput = document.getElementById("statusOutput");
+const leagueSelect = document.getElementById("registerLeague");
+const leagueCodeInput = document.getElementById("registerLeagueCode");
 
 const API_BASE_KEY = "vm_api_base";
 
@@ -15,6 +17,11 @@ function getApiBase() {
 
 function setApiBase(url) {
   localStorage.setItem(API_BASE_KEY, url.replace(/\/+$/, ""));
+}
+
+function updateLeagueCodeRequirement() {
+  leagueCodeInput.required = leagueSelect.value === "lidingo";
+  leagueCodeInput.placeholder = leagueCodeInput.required ? "Kod for Lidingö" : "";
 }
 
 async function api(path, method = "GET", body = undefined) {
@@ -35,12 +42,16 @@ async function registerUser(event) {
   const email = document.getElementById("registerEmail").value.trim();
   const displayName = document.getElementById("registerDisplayName").value.trim();
   const password = document.getElementById("registerPassword").value;
+  const league = document.getElementById("registerLeague").value;
+  const leagueCode = document.getElementById("registerLeagueCode").value.trim();
 
   try {
     const created = await api("/users", "POST", {
       email,
       display_name: displayName,
       password,
+      league,
+      league_code: leagueCode,
     });
     setStatus(`Konto skapat: ${created.display_name} (${created.email})`);
     registerForm.reset();
@@ -51,6 +62,8 @@ async function registerUser(event) {
 
 function init() {
   apiBaseInput.value = getApiBase();
+  updateLeagueCodeRequirement();
+  leagueSelect.addEventListener("change", updateLeagueCodeRequirement);
   saveApiBaseBtn.addEventListener("click", () => {
     setApiBase(apiBaseInput.value.trim());
     setStatus(`API URL sparad: ${getApiBase()}`);

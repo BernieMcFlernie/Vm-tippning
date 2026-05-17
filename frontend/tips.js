@@ -15,6 +15,8 @@ const PLAYOFF_ROUNDS = [
   { key: "final", label: "Final", limit: 2 },
   { key: "vinnare", label: "Vinnare", limit: 1 },
 ];
+const GROUP_LIMITED_ROUNDS = new Set(["sextondel", "attondel"]);
+const MAX_PLAYOFF_TEAMS_PER_GROUP = 3;
 
 let selectedPlayoffRounds = createEmptyPlayoffRounds();
 let predictionStatus = {
@@ -129,6 +131,25 @@ function getUniqueTeams(matches) {
   return Array.from(teams).filter((team) => team).sort((a, b) => a.localeCompare(b, "sv"));
 }
 
+function getTeamGroups(matches) {
+  const teamGroups = new Map();
+  groupMatches(matches).forEach((group) => {
+    group.matches.forEach((match) => {
+      [match.home_team, match.away_team].forEach((team) => {
+        const normalizedTeam = String(team || "").trim();
+        if (normalizedTeam && !teamGroups.has(normalizedTeam)) {
+          teamGroups.set(normalizedTeam, group.title);
+        }
+      });
+    });
+  });
+  return teamGroups;
+}
+
+function countSelectedFromGroup(teams, teamGroups, groupTitle) {
+  return teams.filter((team) => teamGroups.get(team) === groupTitle).length;
+}
+
 function createEmptyPlayoffRounds() {
   return PLAYOFF_ROUNDS.reduce((rounds, round) => {
     rounds[round.key] = [];
@@ -138,9 +159,52 @@ function createEmptyPlayoffRounds() {
 
 function getRoundCandidates(roundIndex, matches) {
   if (roundIndex === 0) {
-    return getUniqueTeams(matches);
+    const teams = [];
+    const seen = new Set();
+    groupMatches(matches).forEach((group) => {
+      group.matches.forEach((match) => {
+        [match.home_team, match.away_team].forEach((team) => {
+          const normalizedTeam = String(team || "").trim();
+          if (normalizedTeam && !seen.has(normalizedTeam)) {
+            seen.add(normalizedTeam);
+            teams.push(normalizedTeam);
+          }
+        });
+      });
+    });
+    return teams;
   }
   return selectedPlayoffRounds[PLAYOFF_ROUNDS[roundIndex - 1].key] || [];
+}
+
+function groupCandidatesByMatchGroup(candidates, matches, teamGroups) {
+  const candidateSet = new Set(candidates);
+  const usedTeams = new Set();
+  const groups = [];
+
+  groupMatches(matches).forEach((matchGroup) => {
+    const teams = [];
+    matchGroup.matches.forEach((match) => {
+      [match.home_team, match.away_team].forEach((team) => {
+        const normalizedTeam = String(team || "").trim();
+        if (!normalizedTeam || !candidateSet.has(normalizedTeam) || usedTeams.has(normalizedTeam)) {
+          return;
+        }
+        usedTeams.add(normalizedTeam);
+        teams.push(normalizedTeam);
+      });
+    });
+    if (teams.length > 0) {
+      groups.push({ title: matchGroup.title, teams });
+    }
+  });
+
+  const ungroupedTeams = candidates.filter((team) => !usedTeams.has(team));
+  if (ungroupedTeams.length > 0) {
+    groups.push({ title: "Ogrupperade lag", teams: ungroupedTeams });
+  }
+
+  return groups;
 }
 
 function pruneLaterPlayoffRounds(startIndex) {
@@ -161,6 +225,8 @@ function renderPlayoffTeamPicker(matches) {
     return;
   }
 
+  const teamGroups = getTeamGroups(matches);
+
   PLAYOFF_ROUNDS.forEach((round, index) => {
     const candidates = getRoundCandidates(index, matches);
     const selected = new Set(selectedPlayoffRounds[round.key] || []);
@@ -172,48 +238,73 @@ function renderPlayoffTeamPicker(matches) {
     heading.textContent = `${round.label} (${selected.size}/${round.limit})`;
     section.appendChild(heading);
 
-    const grid = document.createElement("div");
-    grid.className = "team-pick-grid";
-
     if (candidates.length === 0) {
       const empty = document.createElement("p");
       empty.className = "help";
       empty.textContent = index === 0 ? "Inga lag hittades." : "Valj lag i rundan innan forst.";
       section.appendChild(empty);
     } else {
-      candidates.forEach((team) => {
-        const teamBtn = document.createElement("button");
-        teamBtn.type = "button";
-        teamBtn.className = "team-pick-btn";
-        if (selected.has(team)) {
-          teamBtn.classList.add("is-selected");
-        }
-        teamBtn.disabled = locked;
-        if (locked) {
-          teamBtn.title = "Tippningen ar last.";
-        }
-        teamBtn.textContent = team;
-        teamBtn.onclick = () => {
+      groupCandidatesByMatchGroup(candidates, matches, teamGroups).forEach((candidateGroup) => {
+        const teams = candidateGroup.teams;
+        const groupTitle = candidateGroup.title;
+        const groupSection = document.createElement("section");
+        groupSection.className = "team-group-section";
+
+        const groupHeading = document.createElement("h4");
+        const selectedInGroup = countSelectedFromGroup(
+          selectedPlayoffRounds[round.key] || [],
+          teamGroups,
+          groupTitle,
+        );
+        groupHeading.textContent = GROUP_LIMITED_ROUNDS.has(round.key)
+          ? `${groupTitle} (${selectedInGroup}/${MAX_PLAYOFF_TEAMS_PER_GROUP})`
+          : groupTitle;
+        groupSection.appendChild(groupHeading);
+
+        const grid = document.createElement("div");
+        grid.className = "team-pick-grid";
+
+        teams.forEach((team) => {
+          const teamBtn = document.createElement("button");
+          teamBtn.type = "button";
+          teamBtn.className = "team-pick-btn";
+          if (selected.has(team)) {
+            teamBtn.classList.add("is-selected");
+          }
+          teamBtn.disabled = locked;
           if (locked) {
-            setStatus("Tippningen ar last och kan inte andras.");
-            return;
+            teamBtn.title = "Tippningen ar last.";
           }
-          const currentTeams = selectedPlayoffRounds[round.key] || [];
-          const isSelected = currentTeams.includes(team);
-          if (isSelected) {
-            selectedPlayoffRounds[round.key] = currentTeams.filter((item) => item !== team);
-          } else if (currentTeams.length >= round.limit) {
-            setStatus(`${round.label} kan ha max ${round.limit} lag.`);
-            return;
-          } else {
-            selectedPlayoffRounds[round.key] = [...currentTeams, team];
-          }
-          pruneLaterPlayoffRounds(index);
-          renderPlayoffTeamPicker(matches);
-        };
-        grid.appendChild(teamBtn);
+          teamBtn.textContent = team;
+          teamBtn.onclick = () => {
+            if (locked) {
+              setStatus("Tippningen ar last och kan inte andras.");
+              return;
+            }
+            const currentTeams = selectedPlayoffRounds[round.key] || [];
+            const isSelected = currentTeams.includes(team);
+            if (isSelected) {
+              selectedPlayoffRounds[round.key] = currentTeams.filter((item) => item !== team);
+            } else if (currentTeams.length >= round.limit) {
+              setStatus(`${round.label} kan ha max ${round.limit} lag.`);
+              return;
+            } else if (
+              GROUP_LIMITED_ROUNDS.has(round.key) &&
+              countSelectedFromGroup(currentTeams, teamGroups, teamGroups.get(team)) >= MAX_PLAYOFF_TEAMS_PER_GROUP
+            ) {
+              setStatus(`Du kan valja max ${MAX_PLAYOFF_TEAMS_PER_GROUP} lag fran samma grupp.`);
+              return;
+            } else {
+              selectedPlayoffRounds[round.key] = [...currentTeams, team];
+            }
+            pruneLaterPlayoffRounds(index);
+            renderPlayoffTeamPicker(matches);
+          };
+          grid.appendChild(teamBtn);
+        });
+        groupSection.appendChild(grid);
+        section.appendChild(groupSection);
       });
-      section.appendChild(grid);
     }
 
     playoffTeamsList.appendChild(section);

@@ -7,6 +7,7 @@ from databas import (
     authenticate_user,
     create_user,
     ensure_storage,
+    normalize_league,
     set_user_password,
 )
 from session import logga_ut_session, skapa_session, verifiera_session_token
@@ -44,6 +45,7 @@ def logga_in(email: str, losenord: str) -> dict | None:
             "display_name": _hamta_display_name(user),
             "role": user.get("role"),
             "must_change_password": user.get("must_change_password", False),
+            "league": normalize_league(user.get("league")),
         },
     }
 
@@ -67,6 +69,7 @@ def logga_in_admin_med_losenord(losenord: str) -> dict | None:
             "display_name": _hamta_display_name(user),
             "role": user.get("role"),
             "must_change_password": user.get("must_change_password", False),
+            "league": normalize_league(user.get("league")),
         },
     }
 
@@ -82,6 +85,7 @@ def hamta_anvandare_fran_token(token: str) -> dict | None:
         "display_name": _hamta_display_name(user),
         "role": user.get("role"),
         "must_change_password": user.get("must_change_password", False),
+        "league": normalize_league(user.get("league")),
     }
 
 
@@ -110,8 +114,9 @@ def skapa_anvandare(
     display_name: str,
     role: str = "user",
     must_change_password: bool = False,
+    league: str = "slakten",
 ) -> dict | None:
-    created_user = create_user(email, losenord, display_name, role, must_change_password)
+    created_user = create_user(email, losenord, display_name, role, must_change_password, league)
     if created_user is None:
         return None
     return {
@@ -120,6 +125,7 @@ def skapa_anvandare(
         "display_name": created_user.get("display_name"),
         "role": created_user.get("role"),
         "must_change_password": created_user.get("must_change_password", False),
+        "league": normalize_league(created_user.get("league")),
     }
 
 

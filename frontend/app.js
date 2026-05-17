@@ -198,7 +198,9 @@ async function loadMe() {
   try {
     const me = await api("/me");
     const displayName = String(me.display_name || "").trim();
-    meOutput.textContent = displayName ? `Hej ${displayName}` : "Hej";
+    const league = String(me.league || "").trim();
+    const leagueLabel = league === "lidingo" ? "Lidingö" : "Släkten";
+    meOutput.textContent = displayName ? `Hej ${displayName} | Liga: ${leagueLabel}` : `Hej | Liga: ${leagueLabel}`;
   } catch (error) {
     if (error.message.includes("401")) {
       clearToken();
@@ -222,7 +224,7 @@ async function loadTable() {
 
       const text = document.createElement("div");
       text.className = "table-row-text";
-      text.textContent = `${row.position}. ${row.name} - ${row.points} poang`;
+      text.textContent = `${row.position}. ${row.name} - ${formatPoints(row.points)} poang`;
 
       const button = document.createElement("button");
       button.type = "button";

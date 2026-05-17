@@ -2,11 +2,14 @@ const statusOutput = document.getElementById("statusOutput");
 const loginCard = document.getElementById("loginCard");
 const adminPanel = document.getElementById("adminPanel");
 const playoffPanel = document.getElementById("playoffPanel");
+const predictionsPanel = document.getElementById("predictionsPanel");
 const adminPassword = document.getElementById("adminPassword");
 const loginBtn = document.getElementById("loginBtn");
 const logoutBtn = document.getElementById("logoutBtn");
 const refreshBtn = document.getElementById("refreshBtn");
+const refreshPredictionsBtn = document.getElementById("refreshPredictionsBtn");
 const matchesAdminList = document.getElementById("matchesAdminList");
+const adminPredictionsList = document.getElementById("adminPredictionsList");
 const playoffResultsList = document.getElementById("playoffResultsList");
 const savePlayoffBtn = document.getElementById("savePlayoffBtn");
 
@@ -74,6 +77,7 @@ function showAdminPanel() {
   loginCard.hidden = true;
   adminPanel.hidden = false;
   playoffPanel.hidden = false;
+  predictionsPanel.hidden = false;
   logoutBtn.hidden = false;
 }
 
@@ -81,6 +85,7 @@ function showLogin() {
   loginCard.hidden = false;
   adminPanel.hidden = true;
   playoffPanel.hidden = true;
+  predictionsPanel.hidden = true;
   logoutBtn.hidden = true;
 }
 
@@ -95,6 +100,7 @@ async function login() {
     adminPassword.value = "";
     showAdminPanel();
     await loadFacit();
+    await loadAllPredictions();
     setStatus("Inloggad.");
   } catch (error) {
     clearToken();
@@ -264,6 +270,73 @@ function renderPlayoffResults() {
   });
 }
 
+function renderPlayoffPredictionSummary(rounds) {
+  return PLAYOFF_ROUNDS
+    .map((round) => {
+      const teams = rounds && Array.isArray(rounds[round.key]) ? rounds[round.key] : [];
+      return `${round.label}: ${teams.length ? teams.join(", ") : "-"}`;
+    })
+    .join(" | ");
+}
+
+function renderAdminPredictionRow(row) {
+  const item = document.createElement("div");
+  item.className = "prediction-item";
+  item.textContent = `#${row.match_id} ${row.match}: ${row.prediction}`;
+  return item;
+}
+
+function renderAdminPlayerPredictions(player) {
+  const item = document.createElement("article");
+  item.className = "table-item";
+
+  const title = document.createElement("div");
+  title.className = "match-title";
+  title.textContent = `${player.name} | ${player.league_name}`;
+  item.appendChild(title);
+
+  const playoff = document.createElement("div");
+  playoff.className = "prediction-summary";
+  playoff.textContent = `Slutspel: ${renderPlayoffPredictionSummary(player.playoff_predictions)}`;
+  item.appendChild(playoff);
+
+  const predictions = Array.isArray(player.predictions) ? player.predictions : [];
+  if (predictions.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "prediction-item";
+    empty.textContent = "Inga matchtippningar.";
+    item.appendChild(empty);
+    return item;
+  }
+
+  predictions.forEach((prediction) => {
+    item.appendChild(renderAdminPredictionRow(prediction));
+  });
+  return item;
+}
+
+async function loadAllPredictions() {
+  adminPredictionsList.innerHTML = "Laddar tippningar...";
+  try {
+    const players = await api("/admin/predictions");
+    adminPredictionsList.innerHTML = "";
+    if (!Array.isArray(players) || players.length === 0) {
+      adminPredictionsList.textContent = "Inga spelare hittades.";
+      return;
+    }
+    players.forEach((player) => {
+      adminPredictionsList.appendChild(renderAdminPlayerPredictions(player));
+    });
+  } catch (error) {
+    if (error.status === 401 || error.status === 403) {
+      logout();
+      return;
+    }
+    adminPredictionsList.textContent = "Kunde inte hamta tippningar.";
+    setStatus(`Kunde inte hamta alla tippningar: ${error.message}`);
+  }
+}
+
 async function savePlayoffResults() {
   try {
     await api("/admin/playoff-results", "POST", { rounds: playoffResults });
@@ -310,6 +383,7 @@ function init() {
   loginBtn.addEventListener("click", login);
   logoutBtn.addEventListener("click", logout);
   refreshBtn.addEventListener("click", loadFacit);
+  refreshPredictionsBtn.addEventListener("click", loadAllPredictions);
   savePlayoffBtn.addEventListener("click", savePlayoffResults);
   adminPassword.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
@@ -320,6 +394,7 @@ function init() {
   if (getToken()) {
     showAdminPanel();
     loadFacit();
+    loadAllPredictions();
   } else {
     showLogin();
   }

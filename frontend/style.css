@@ -351,6 +351,16 @@ button.is-selected {
   margin-bottom: 10px;
 }
 
+.team-group-section {
+  margin-top: 10px;
+}
+
+.team-group-section h4 {
+  margin: 0 0 8px;
+  color: var(--ink-soft);
+  font-size: 0.95rem;
+}
+
 .playoff-round {
   border: 1px dashed var(--line);
   border-radius: 12px;

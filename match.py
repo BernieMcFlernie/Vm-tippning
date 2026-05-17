@@ -9,6 +9,7 @@ from databas import (
     load_players,
     load_playoff_results,
     load_predictions,
+    normalize_league,
     save_matches,
     save_players,
     save_predictions,
@@ -99,6 +100,7 @@ class Spelare:
     predictions: List[Prediction] = field(default_factory=list)
     attondels_lag: List[str] = field(default_factory=list)
     slutspel_lag: Dict[str, List[str]] = field(default_factory=dict)
+    league: str = "slakten"
     points: float = 0.0
 
     def add_prediction(self, prediction: Prediction) -> None:
@@ -228,6 +230,7 @@ def spara_till_json(matches: List[Match], players: List[Spelare]) -> None:
                 "points": player.points,
                 "attondels_lag": player.attondels_lag,
                 "slutspel_lag": player.slutspel_lag,
+                "league": normalize_league(player.league),
             }
         )
         for prediction in player.predictions:
@@ -285,7 +288,10 @@ def las_fran_json() -> tuple[List[Match], List[Spelare]]:
         player_id = int(row.get("id", 0))
         if player_id <= 0:
             continue
-        player = Spelare(name=str(row.get("name", "")))
+        player = Spelare(
+            name=str(row.get("name", "")),
+            league=normalize_league(row.get("league")),
+        )
         points_value = row.get("points", 0.0)
         try:
             player.points = float(points_value)

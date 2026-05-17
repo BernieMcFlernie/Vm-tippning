@@ -20,12 +20,14 @@ from auth import (
 )
 from match import PLAYOFF_ROUNDS, las_fran_json, rakna_tabell
 from databas import (
+    LEAGUES,
     find_user_by_display_name,
     find_user_by_email,
     load_matches,
     load_players,
     load_playoff_results,
     load_predictions,
+    normalize_league,
     save_matches,
     save_players,
     save_playoff_results,
@@ -65,6 +67,8 @@ class CreateUserRequest(BaseModel):
     display_name: str = Field(min_length=2)
     role: str = Field(default="user")
     must_change_password: bool = Field(default=False)
+    league: str = Field(default="slakten")
+    league_code: str = Field(default="")
 
 
 class CreateGroupPredictionRequest(BaseModel):
@@ -107,6 +111,10 @@ PLAYOFF_ROUND_LABELS = {
     "semi": "Semifinal",
     "final": "Final",
     "vinnare": "Vinnare",
+}
+
+LEAGUE_CODES = {
+    "lidingo": "1002",
 }
 
 
@@ -162,17 +170,55 @@ def _hamta_match(match_id: int) -> dict[str, Any]:
     return match_row
 
 
+def _user_league(user: dict[str, Any]) -> str:
+    return normalize_league(user.get("league"))
+
+
+def _validate_league_code(league: str, code: str) -> None:
+    expected_code = LEAGUE_CODES.get(league)
+    if expected_code is None:
+        return
+    if str(code).strip() != expected_code:
+        league_name = LEAGUES.get(league, "ligan")
+        raise HTTPException(status_code=403, detail=f"Fel kod for {league_name}")
+
+
+def _player_league(row: dict[str, Any]) -> str:
+    return normalize_league(row.get("league"))
+
+
+def _player_row_belongs_to_league(row: dict[str, Any], league: str) -> bool:
+    return _player_league(row) == league
+
+
+def _league_player_objects(players_data: list[Any], league: str) -> list[tuple[int, Any]]:
+    return [
+        (player_id, player)
+        for player_id, player in enumerate(players_data, start=1)
+        if normalize_league(getattr(player, "league", None)) == league
+    ]
+
+
 def _hamta_eller_skapa_player_id(user: dict[str, Any]) -> int:
     players_data = load_players()
     user_display_name = str(user.get("display_name", "")).strip()
+    league = _user_league(user)
     if not user_display_name:
         raise HTTPException(status_code=400, detail="Anvandaren saknar display_name")
 
     player_row = next(
-        (row for row in players_data if str(row.get("name", "")).strip().lower() == user_display_name.lower()),
+        (
+            row
+            for row in players_data
+            if str(row.get("name", "")).strip().lower() == user_display_name.lower()
+            and _player_row_belongs_to_league(row, league)
+        ),
         None,
     )
     if player_row is not None:
+        if "league" not in player_row:
+            player_row["league"] = league
+            save_players(players_data)
         return int(player_row.get("id", 0))
 
     next_player_id = 1
@@ -188,6 +234,7 @@ def _hamta_eller_skapa_player_id(user: dict[str, Any]) -> int:
         "points": 0.0,
         "attondels_lag": [],
         "slutspel_lag": {},
+        "league": league,
     }
     players_data.append(new_player)
     save_players(players_data)
@@ -197,11 +244,12 @@ def _hamta_eller_skapa_player_id(user: dict[str, Any]) -> int:
 def _hamta_player_id(user: dict[str, Any]) -> int | None:
     players_data = load_players()
     user_display_name = str(user.get("display_name", "")).strip().lower()
+    league = _user_league(user)
     if not user_display_name:
         return None
     for row in players_data:
         player_name = str(row.get("name", "")).strip().lower()
-        if player_name != user_display_name:
+        if player_name != user_display_name or not _player_row_belongs_to_league(row, league):
             continue
         try:
             return int(row.get("id", 0))
@@ -344,6 +392,11 @@ def predictions_status(_: dict[str, Any] = Depends(_require_user)) -> dict[str, 
     }
 
 
+@app.get("/leagues")
+def leagues() -> list[dict[str, str]]:
+    return [{"id": league_id, "name": name} for league_id, name in LEAGUES.items()]
+
+
 @app.post("/login")
 def login(payload: LoginRequest) -> dict[str, Any]:
     result = logga_in(payload.email, payload.password)
@@ -395,6 +448,8 @@ def create_user(
 
     role = payload.role
     must_change_password = payload.must_change_password
+    league = normalize_league(payload.league)
+    _validate_league_code(league, payload.league_code)
     if current_user is None or current_user.get("role") != "admin":
         role = "user"
         must_change_password = False
@@ -410,6 +465,7 @@ def create_user(
         payload.display_name,
         role,
         must_change_password,
+        league,
     )
     if created_user is None:
         raise HTTPException(
@@ -485,9 +541,10 @@ def my_predictions(user: dict[str, Any] = Depends(_require_user)) -> list[dict[s
 @app.get("/predictions/player/{player_id}")
 def predictions_for_player(
     player_id: int,
-    _: dict[str, Any] = Depends(_require_user),
+    user: dict[str, Any] = Depends(_require_user),
 ) -> dict[str, Any]:
     _require_predictions_visible()
+    league = _user_league(user)
     players_data = load_players()
     player_row: dict[str, Any] | None = None
     for row in players_data:
@@ -495,20 +552,19 @@ def predictions_for_player(
             current_player_id = int(row.get("id", 0))
         except (TypeError, ValueError):
             continue
-        if current_player_id == player_id:
+        if current_player_id == player_id and _player_row_belongs_to_league(row, league):
             player_row = row
             break
     if player_row is None:
         raise HTTPException(status_code=404, detail="Spelaren hittades inte")
 
     matches_data, player_objects = las_fran_json()
-    current_player = None
-    if 1 <= player_id <= len(player_objects):
-        current_player = player_objects[player_id - 1]
+    league_players = _league_player_objects(player_objects, league)
+    current_player = next((player for current_id, player in league_players if current_id == player_id), None)
     if current_player is None:
         raise HTTPException(status_code=404, detail="Spelarens tippningar hittades inte")
 
-    total_players = len(player_objects) if player_objects else 1
+    total_players = len(league_players) if league_players else 1
 
     rows: list[dict[str, Any]] = []
     for match_id, match in enumerate(matches_data, start=1):
@@ -533,7 +589,7 @@ def predictions_for_player(
             is_correct = prediction.is_correct()
 
         correct_count = 0
-        for player in player_objects:
+        for _, player in league_players:
             candidate = player.prediction_for(match)
             if candidate is not None and candidate.is_correct():
                 correct_count += 1
@@ -670,6 +726,82 @@ def admin_facit(_: dict[str, Any] = Depends(_require_admin)) -> dict[str, Any]:
     }
 
 
+@app.get("/admin/predictions")
+def admin_predictions(_: dict[str, Any] = Depends(_require_admin)) -> list[dict[str, Any]]:
+    matches_by_id: dict[int, dict[str, Any]] = {}
+    for row in load_matches():
+        try:
+            match_id = int(row.get("id", 0))
+        except (TypeError, ValueError):
+            continue
+        if match_id > 0:
+            matches_by_id[match_id] = row
+
+    raw_predictions_by_player: dict[int, list[dict[str, Any]]] = {}
+    for row in load_predictions():
+        try:
+            player_id = int(row.get("player_id", 0))
+            match_id = int(row.get("match_id", 0))
+        except (TypeError, ValueError):
+            continue
+        if player_id <= 0 or match_id <= 0:
+            continue
+
+        match_row = matches_by_id.get(match_id, {})
+        home_team = str(match_row.get("home_team", "")).strip()
+        away_team = str(match_row.get("away_team", "")).strip()
+        prediction_type = str(row.get("type", "")).strip()
+        prediction = "-"
+
+        if prediction_type == "gruppspel":
+            predicted_outcome = str(row.get("predicted_outcome", "")).strip().lower()
+            if predicted_outcome == "vinst":
+                prediction = home_team or "Hemmalag"
+            elif predicted_outcome == "forlust":
+                prediction = away_team or "Bortalag"
+            elif predicted_outcome == "kryss":
+                prediction = "Kryss"
+        elif prediction_type == "slutspel":
+            prediction = str(row.get("predicted_team", "")).strip() or "-"
+
+        raw_predictions_by_player.setdefault(player_id, []).append(
+            {
+                "match_id": match_id,
+                "match": f"{home_team} - {away_team}".strip(" -"),
+                "type": prediction_type,
+                "prediction": prediction,
+            }
+        )
+
+    players: list[dict[str, Any]] = []
+    for row in load_players():
+        try:
+            player_id = int(row.get("id", 0))
+        except (TypeError, ValueError):
+            continue
+        if player_id <= 0:
+            continue
+
+        league = _player_league(row)
+        predictions = sorted(
+            raw_predictions_by_player.get(player_id, []),
+            key=lambda item: int(item.get("match_id", 0)),
+        )
+        players.append(
+            {
+                "player_id": player_id,
+                "name": str(row.get("name", "")).strip() or f"Spelare {player_id}",
+                "league": league,
+                "league_name": LEAGUES.get(league, league),
+                "predictions": predictions,
+                "playoff_predictions": _playoff_rounds_from_player(row),
+            }
+        )
+
+    players.sort(key=lambda item: (str(item.get("league_name", "")), str(item.get("name", "")).lower()))
+    return players
+
+
 @app.post("/admin/matches/{match_id}/result")
 def admin_save_match_result(
     match_id: int,
@@ -719,16 +851,17 @@ def admin_save_playoff_results(
 @app.get("/facit/me")
 def my_facit(user: dict[str, Any] = Depends(_require_user)) -> list[dict[str, Any]]:
     matches_data, players_data = las_fran_json()
-    player_objs_by_id = {index: player for index, player in enumerate(players_data, start=1)}
+    league = _user_league(user)
+    league_players = [player for _, player in _league_player_objects(players_data, league)]
     display_name = str(user.get("display_name", "")).strip().lower()
     if not display_name:
         return []
 
-    current_player = next((player for player in players_data if player.name.strip().lower() == display_name), None)
+    current_player = next((player for player in league_players if player.name.strip().lower() == display_name), None)
     if current_player is None:
         return []
 
-    total_players = len(players_data)
+    total_players = len(league_players)
     rows: list[dict[str, Any]] = []
     for index, match in enumerate(matches_data, start=1):
         prediction = current_player.prediction_for(match)
@@ -749,7 +882,7 @@ def my_facit(user: dict[str, Any] = Depends(_require_user)) -> list[dict[str, An
             is_correct = prediction.is_correct()
 
         correct_count = 0
-        for player in players_data:
+        for player in league_players:
             candidate = player.prediction_for(match)
             if candidate is not None and candidate.is_correct():
                 correct_count += 1
@@ -805,9 +938,10 @@ def matches(_: dict[str, Any] = Depends(_require_user)) -> list[dict[str, Any]]:
 @app.get("/predictions/match/{match_id}")
 def predictions_for_match(
     match_id: int,
-    _: dict[str, Any] = Depends(_require_user),
+    user: dict[str, Any] = Depends(_require_user),
 ) -> list[dict[str, Any]]:
     _require_predictions_visible()
+    league = _user_league(user)
     match_row = _hamta_match(match_id)
     home_team = str(match_row.get("home_team", "")).strip()
     away_team = str(match_row.get("away_team", "")).strip()
@@ -821,6 +955,8 @@ def predictions_for_match(
             continue
         if player_id <= 0:
             continue
+        if not _player_row_belongs_to_league(player, league):
+            continue
         players_by_id[player_id] = str(player.get("name", "")).strip() or f"Spelare {player_id}"
 
     raw_rows: list[dict[str, Any]] = []
@@ -831,6 +967,8 @@ def predictions_for_match(
         except (TypeError, ValueError):
             continue
         if row_match_id != match_id:
+            continue
+        if player_id not in players_by_id:
             continue
 
         prediction_type = str(row.get("type", "")).strip()
@@ -872,12 +1010,13 @@ def predictions_for_match(
         bucket_counts[bucket] = bucket_counts.get(bucket, 0) + 1
 
     matches_data, players_data = las_fran_json()
-    player_objs_by_id = {index: player for index, player in enumerate(players_data, start=1)}
+    league_players = _league_player_objects(players_data, league)
+    player_objs_by_id = {player_id: player for player_id, player in league_players}
     match = next((candidate for index, candidate in enumerate(matches_data, start=1) if index == match_id), None)
     is_played = bool(match is not None and match.is_played)
     correct_count = 0
     if match is not None:
-        for player in players_data:
+        for _, player in league_players:
             prediction = player.prediction_for(match)
             if prediction is not None and prediction.is_correct():
                 correct_count += 1
@@ -918,27 +1057,34 @@ def predictions_for_match(
 
 
 @app.get("/players")
-def players(_: dict[str, Any] = Depends(_require_user)) -> list[dict[str, Any]]:
+def players(user: dict[str, Any] = Depends(_require_user)) -> list[dict[str, Any]]:
     matches_data, players_data = las_fran_json()
-    rakna_tabell(matches_data, players_data)
+    league = _user_league(user)
+    league_players = _league_player_objects(players_data, league)
+    player_objects = [player for _, player in league_players]
+    rakna_tabell(matches_data, player_objects)
     return [
         {
-            "id": index,
+            "id": player_id,
             "name": player.name,
             "points": player.points,
             "attondels_lag": player.attondels_lag,
             "slutspel_lag": player.slutspel_lag,
+            "league": league,
         }
-        for index, player in enumerate(players_data, start=1)
+        for player_id, player in league_players
     ]
 
 
 @app.get("/table")
-def table(_: dict[str, Any] = Depends(_require_user)) -> list[dict[str, Any]]:
+def table(user: dict[str, Any] = Depends(_require_user)) -> list[dict[str, Any]]:
     matches_data, players_data = las_fran_json()
-    rakna_tabell(matches_data, players_data)
+    league = _user_league(user)
+    league_players = _league_player_objects(players_data, league)
+    player_objects = [player for _, player in league_players]
+    rakna_tabell(matches_data, player_objects)
     sorted_players_with_ids = sorted(
-        enumerate(players_data, start=1),
+        league_players,
         key=lambda item: (-item[1].points, item[1].name),
     )
     return [
@@ -947,6 +1093,7 @@ def table(_: dict[str, Any] = Depends(_require_user)) -> list[dict[str, Any]]:
             "position": position,
             "name": player.name,
             "points": player.points,
+            "league": league,
         }
         for position, (player_id, player) in enumerate(sorted_players_with_ids, start=1)
     ]

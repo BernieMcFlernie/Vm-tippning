@@ -221,3 +221,9 @@ __marimo__/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Local import and hosting artifacts
+server-data-raw/
+server-data-migrated/
+data-backup-*/
+run_server.ps1
