@@ -172,7 +172,9 @@ async function api(path, method = "GET", body = undefined) {
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(data.detail || `HTTP ${response.status}`);
+    const error = new Error(data.detail || `HTTP ${response.status}`);
+    error.status = response.status;
+    throw error;
   }
   return data;
 }
@@ -256,6 +258,10 @@ async function loadTable() {
           renderPlayerPredictions(details, playerData);
           isLoaded = true;
         } catch (error) {
+          if (error.status === 403 || String(error.message || "").includes("Andras tippningar")) {
+            details.textContent = "Admin har stangt av visning av andras tippningar.";
+            return;
+          }
           details.textContent = `Kunde inte hamta tippningar: ${error.message}`;
           button.textContent = "Visa tippning";
           details.hidden = true;

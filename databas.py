@@ -17,6 +17,7 @@ PLAYOFF_RESULTS_FILE = DATA_DIR / "playoff_results.json"
 PLAYERS_FILE = DATA_DIR / "players.json"
 USERS_FILE = DATA_DIR / "users.json"
 SESSIONS_FILE = DATA_DIR / "sessions.json"
+SETTINGS_FILE = DATA_DIR / "settings.json"
 
 DEFAULT_ADMIN_EMAIL = "admin@vm.local"
 DEFAULT_ADMIN_PASSWORD = "changeme"
@@ -101,6 +102,11 @@ def _ensure_files_exist() -> None:
     ):
         if not file_path.exists():
             file_path.write_text("[]", encoding="utf-8")
+    if not SETTINGS_FILE.exists():
+        SETTINGS_FILE.write_text(
+            json.dumps(default_settings(), ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
 
 
 def ensure_storage() -> None:
@@ -122,6 +128,39 @@ def _read_json_array(file_path: Path) -> List[dict[str, Any]]:
 def _write_json_array(file_path: Path, rows: List[dict[str, Any]]) -> None:
     _ensure_files_exist()
     file_path.write_text(json.dumps(rows, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def default_settings() -> dict[str, Any]:
+    return {
+        "predictions_open": True,
+        "predictions_visible": False,
+    }
+
+
+def load_settings() -> dict[str, Any]:
+    _ensure_files_exist()
+    raw = SETTINGS_FILE.read_text(encoding="utf-8").strip()
+    data = json.loads(raw) if raw else {}
+    if not isinstance(data, dict):
+        data = {}
+    settings = default_settings()
+    settings.update({key: data.get(key, settings[key]) for key in settings})
+    return {
+        "predictions_open": bool(settings["predictions_open"]),
+        "predictions_visible": bool(settings["predictions_visible"]),
+    }
+
+
+def save_settings(settings: dict[str, Any]) -> dict[str, Any]:
+    current = load_settings()
+    for key in default_settings():
+        if key in settings:
+            current[key] = bool(settings[key])
+    SETTINGS_FILE.write_text(
+        json.dumps(current, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    return current
 
 
 def _validate_unique_user_emails(users: List[dict[str, Any]]) -> None:

@@ -326,6 +326,23 @@ button.is-selected {
   grid-template-columns: repeat(2, 1fr);
 }
 
+.settings-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  color: var(--ink);
+}
+
+.toggle-row input {
+  width: auto;
+}
+
 .admin-result-grid {
   display: grid;
   grid-template-columns: 90px 90px minmax(180px, 1fr) auto;

@@ -1,5 +1,6 @@
 const statusOutput = document.getElementById("statusOutput");
 const loginCard = document.getElementById("loginCard");
+const settingsPanel = document.getElementById("settingsPanel");
 const adminPanel = document.getElementById("adminPanel");
 const playoffPanel = document.getElementById("playoffPanel");
 const predictionsPanel = document.getElementById("predictionsPanel");
@@ -8,6 +9,9 @@ const loginBtn = document.getElementById("loginBtn");
 const logoutBtn = document.getElementById("logoutBtn");
 const refreshBtn = document.getElementById("refreshBtn");
 const refreshPredictionsBtn = document.getElementById("refreshPredictionsBtn");
+const saveSettingsBtn = document.getElementById("saveSettingsBtn");
+const predictionsOpenToggle = document.getElementById("predictionsOpenToggle");
+const predictionsVisibleToggle = document.getElementById("predictionsVisibleToggle");
 const matchesAdminList = document.getElementById("matchesAdminList");
 const adminPredictionsList = document.getElementById("adminPredictionsList");
 const playoffResultsList = document.getElementById("playoffResultsList");
@@ -75,6 +79,7 @@ function createEmptyPlayoffRounds() {
 
 function showAdminPanel() {
   loginCard.hidden = true;
+  settingsPanel.hidden = false;
   adminPanel.hidden = false;
   playoffPanel.hidden = false;
   predictionsPanel.hidden = false;
@@ -83,6 +88,7 @@ function showAdminPanel() {
 
 function showLogin() {
   loginCard.hidden = false;
+  settingsPanel.hidden = true;
   adminPanel.hidden = true;
   playoffPanel.hidden = true;
   predictionsPanel.hidden = true;
@@ -99,6 +105,7 @@ async function login() {
     setToken(result.token);
     adminPassword.value = "";
     showAdminPanel();
+    await loadPredictionSettings();
     await loadFacit();
     await loadAllPredictions();
     setStatus("Inloggad.");
@@ -270,6 +277,43 @@ function renderPlayoffResults() {
   });
 }
 
+function applyPredictionSettings(settings) {
+  predictionsOpenToggle.checked = Boolean(settings.predictions_open);
+  predictionsVisibleToggle.checked = Boolean(settings.predictions_visible);
+}
+
+async function loadPredictionSettings() {
+  try {
+    const settings = await api("/admin/prediction-settings");
+    applyPredictionSettings(settings);
+  } catch (error) {
+    if (error.status === 401 || error.status === 403) {
+      logout();
+      return;
+    }
+    setStatus(`Kunde inte hamta tippningskontroll: ${error.message}`);
+  }
+}
+
+async function savePredictionSettings() {
+  try {
+    const settings = await api("/admin/prediction-settings", "POST", {
+      predictions_open: predictionsOpenToggle.checked,
+      predictions_visible: predictionsVisibleToggle.checked,
+    });
+    applyPredictionSettings(settings);
+    const editText = settings.predictions_open ? "kan andra" : "kan inte andra";
+    const viewText = settings.predictions_visible ? "kan se varandra" : "kan inte se varandra";
+    setStatus(`Tippningskontroll sparad: spelare ${editText}, spelare ${viewText}.`);
+  } catch (error) {
+    if (error.status === 401 || error.status === 403) {
+      logout();
+      return;
+    }
+    setStatus(`Kunde inte spara tippningskontroll: ${error.message}`);
+  }
+}
+
 function renderPlayoffPredictionSummary(rounds) {
   return PLAYOFF_ROUNDS
     .map((round) => {
@@ -384,6 +428,7 @@ function init() {
   logoutBtn.addEventListener("click", logout);
   refreshBtn.addEventListener("click", loadFacit);
   refreshPredictionsBtn.addEventListener("click", loadAllPredictions);
+  saveSettingsBtn.addEventListener("click", savePredictionSettings);
   savePlayoffBtn.addEventListener("click", savePlayoffResults);
   adminPassword.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
@@ -393,6 +438,7 @@ function init() {
 
   if (getToken()) {
     showAdminPanel();
+    loadPredictionSettings();
     loadFacit();
     loadAllPredictions();
   } else {

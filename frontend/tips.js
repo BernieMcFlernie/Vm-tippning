@@ -20,7 +20,6 @@ const MAX_PLAYOFF_TEAMS_PER_GROUP = 3;
 
 let selectedPlayoffRounds = createEmptyPlayoffRounds();
 let predictionStatus = {
-  deadline: "2026-06-11T00:00:00",
   locked: false,
   can_edit: true,
   can_view_others: false,
@@ -40,20 +39,6 @@ function getToken() {
 
 function clearToken() {
   localStorage.removeItem(TOKEN_KEY);
-}
-
-function formatDeadline(deadline) {
-  const date = new Date(deadline);
-  if (Number.isNaN(date.getTime())) {
-    return "2026-06-11 00:00";
-  }
-  return date.toLocaleString("sv-SE", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 }
 
 async function api(path, method = "GET", body = undefined) {
@@ -446,8 +431,8 @@ async function loadMatches() {
     savePlayoffTeamsBtn.disabled = Boolean(predictionStatus.locked);
     setStatus(
       predictionStatus.locked
-        ? `Tippningen ar last sedan ${formatDeadline(predictionStatus.deadline)}.`
-        : `Tippningen laser ${formatDeadline(predictionStatus.deadline)}.`
+        ? "Tippningen ar last och kan inte andras."
+        : "Tippningen ar oppen for andringar."
     );
 
     let playoffData = { rounds: createEmptyPlayoffRounds() };

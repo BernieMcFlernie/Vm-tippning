@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -27,11 +26,13 @@ from databas import (
     load_players,
     load_playoff_results,
     load_predictions,
+    load_settings,
     normalize_league,
     save_matches,
     save_players,
     save_playoff_results,
     save_predictions,
+    save_settings,
 )
 
 app = FastAPI(title="VM Tippning API", version="0.1.0")
@@ -44,7 +45,6 @@ app.add_middleware(
 )
 security = HTTPBearer(auto_error=False)
 FRONTEND_DIR = Path(__file__).resolve().parent / "frontend"
-TIPPNINGS_DEADLINE = datetime(2026, 6, 11, 0, 0, 0)
 
 
 class LoginRequest(BaseModel):
@@ -95,6 +95,11 @@ class SaveMatchResultRequest(BaseModel):
     advancing_team: str | None = Field(default=None)
 
 
+class SavePredictionSettingsRequest(BaseModel):
+    predictions_open: bool
+    predictions_visible: bool
+
+
 PLAYOFF_ROUND_LIMITS = {
     "sextondel": 32,
     "attondel": 16,
@@ -142,23 +147,32 @@ def _require_admin(credentials: HTTPAuthorizationCredentials | None = Depends(se
     return user
 
 
-def _tippningar_are_locked(now: datetime | None = None) -> bool:
-    return (now or datetime.now()) >= TIPPNINGS_DEADLINE
+def _prediction_settings_response() -> dict[str, bool]:
+    settings = load_settings()
+    predictions_open = bool(settings.get("predictions_open", True))
+    predictions_visible = bool(settings.get("predictions_visible", False))
+    return {
+        "predictions_open": predictions_open,
+        "predictions_visible": predictions_visible,
+        "locked": not predictions_open,
+        "can_edit": predictions_open,
+        "can_view_others": predictions_visible,
+    }
 
 
 def _require_predictions_open() -> None:
-    if _tippningar_are_locked():
+    if not _prediction_settings_response()["can_edit"]:
         raise HTTPException(
             status_code=403,
-            detail="Tippningarna ar lasta och kan inte andras efter deadline.",
+            detail="Tippningarna ar lasta och kan inte andras.",
         )
 
 
 def _require_predictions_visible() -> None:
-    if not _tippningar_are_locked():
+    if not _prediction_settings_response()["can_view_others"]:
         raise HTTPException(
             status_code=403,
-            detail="Andras tippningar kan inte visas fore deadline.",
+            detail="Andras tippningar kan inte visas just nu.",
         )
 
 
@@ -382,14 +396,27 @@ def health() -> dict[str, str]:
 
 
 @app.get("/predictions/status")
-def predictions_status(_: dict[str, Any] = Depends(_require_user)) -> dict[str, Any]:
-    locked = _tippningar_are_locked()
-    return {
-        "deadline": TIPPNINGS_DEADLINE.isoformat(),
-        "locked": locked,
-        "can_edit": not locked,
-        "can_view_others": locked,
-    }
+def predictions_status(_: dict[str, Any] = Depends(_require_user)) -> dict[str, bool]:
+    return _prediction_settings_response()
+
+
+@app.get("/admin/prediction-settings")
+def admin_prediction_settings(_: dict[str, Any] = Depends(_require_admin)) -> dict[str, bool]:
+    return _prediction_settings_response()
+
+
+@app.post("/admin/prediction-settings")
+def admin_save_prediction_settings(
+    payload: SavePredictionSettingsRequest,
+    _: dict[str, Any] = Depends(_require_admin),
+) -> dict[str, bool]:
+    save_settings(
+        {
+            "predictions_open": payload.predictions_open,
+            "predictions_visible": payload.predictions_visible,
+        }
+    )
+    return _prediction_settings_response()
 
 
 @app.get("/leagues")

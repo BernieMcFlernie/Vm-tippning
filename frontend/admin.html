@@ -23,6 +23,21 @@
       <button id="loginBtn" type="button">Logga in</button>
     </section>
 
+    <section id="settingsPanel" class="card" hidden>
+      <h2>Tippningskontroll</h2>
+      <div class="settings-grid">
+        <label class="toggle-row" for="predictionsOpenToggle">
+          <input id="predictionsOpenToggle" type="checkbox">
+          <span>Spelare kan andra tippningar</span>
+        </label>
+        <label class="toggle-row" for="predictionsVisibleToggle">
+          <input id="predictionsVisibleToggle" type="checkbox">
+          <span>Spelare kan se varandras tippningar</span>
+        </label>
+      </div>
+      <button id="saveSettingsBtn" type="button">Spara kontroll</button>
+    </section>
+
     <section id="adminPanel" class="card" hidden>
       <h2>Matchfacit</h2>
       <p class="help">Tomma mal sparas som ospelad match. For slutspelsmatcher kan du ange laget som gar vidare.</p>
