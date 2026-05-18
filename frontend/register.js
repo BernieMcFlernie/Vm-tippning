@@ -46,8 +46,14 @@ async function registerUser(event) {
   const email = document.getElementById("registerEmail").value.trim();
   const displayName = document.getElementById("registerDisplayName").value.trim();
   const password = document.getElementById("registerPassword").value;
+  const passwordConfirm = document.getElementById("registerPasswordConfirm").value;
   const league = document.getElementById("registerLeague").value;
   const leagueCode = document.getElementById("registerLeagueCode").value.trim();
+
+  if (password !== passwordConfirm) {
+    setStatus("Losenorden matchar inte.");
+    return;
+  }
 
   try {
     const created = await api("/users", "POST", {
