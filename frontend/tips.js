@@ -24,9 +24,20 @@ let predictionStatus = {
   can_edit: true,
   can_view_others: false,
 };
+let playoffSaveRequestId = 0;
+let playoffSaveChain = Promise.resolve();
 
 function setStatus(message) {
   statusOutput.textContent = message;
+}
+
+function renderWithoutScrollJump(renderFn) {
+  const scrollX = window.scrollX;
+  const scrollY = window.scrollY;
+  renderFn();
+  requestAnimationFrame(() => {
+    window.scrollTo(scrollX, scrollY);
+  });
 }
 
 function getApiBase() {
@@ -139,6 +150,13 @@ function createEmptyPlayoffRounds() {
   return PLAYOFF_ROUNDS.reduce((rounds, round) => {
     rounds[round.key] = [];
     return rounds;
+  }, {});
+}
+
+function clonePlayoffRounds(rounds) {
+  return PLAYOFF_ROUNDS.reduce((copy, round) => {
+    copy[round.key] = Array.isArray(rounds[round.key]) ? [...rounds[round.key]] : [];
+    return copy;
   }, {});
 }
 
@@ -261,7 +279,7 @@ function renderPlayoffTeamPicker(matches) {
             teamBtn.title = "Tippningen ar last.";
           }
           teamBtn.textContent = team;
-          teamBtn.onclick = () => {
+          teamBtn.onclick = async () => {
             if (locked) {
               setStatus("Tippningen ar last och kan inte andras.");
               return;
@@ -283,7 +301,8 @@ function renderPlayoffTeamPicker(matches) {
               selectedPlayoffRounds[round.key] = [...currentTeams, team];
             }
             pruneLaterPlayoffRounds(index);
-            renderPlayoffTeamPicker(matches);
+            renderWithoutScrollJump(() => renderPlayoffTeamPicker(matches));
+            await savePlayoffTeams("Slutspelstippning sparad automatiskt.");
           };
           grid.appendChild(teamBtn);
         });
@@ -296,14 +315,12 @@ function renderPlayoffTeamPicker(matches) {
   });
 }
 
-async function savePlayoffTeams() {
-  if (predictionStatus.locked) {
-    setStatus("Tippningen ar last och kan inte andras.");
-    return;
-  }
+async function persistPlayoffTeams(roundsSnapshot, successMessage, requestId) {
   try {
-    await api("/playoff-predictions/me", "POST", { rounds: selectedPlayoffRounds });
-    setStatus("Slutspelstippning sparad.");
+    await api("/playoff-predictions/me", "POST", { rounds: roundsSnapshot });
+    if (requestId === playoffSaveRequestId) {
+      setStatus(successMessage);
+    }
   } catch (error) {
     if (error.status === 401) {
       clearToken();
@@ -316,6 +333,20 @@ async function savePlayoffTeams() {
     }
     setStatus(`Kunde inte spara slutspelstippning: ${error.message}`);
   }
+}
+
+function savePlayoffTeams(successMessage = "Slutspelstippning sparad.") {
+  if (predictionStatus.locked) {
+    setStatus("Tippningen ar last och kan inte andras.");
+    return Promise.resolve();
+  }
+  const requestId = playoffSaveRequestId + 1;
+  playoffSaveRequestId = requestId;
+  const roundsSnapshot = clonePlayoffRounds(selectedPlayoffRounds);
+  playoffSaveChain = playoffSaveChain
+    .catch(() => undefined)
+    .then(() => persistPlayoffTeams(roundsSnapshot, successMessage, requestId));
+  return playoffSaveChain;
 }
 
 function renderMatch(match, prediction) {
@@ -343,7 +374,9 @@ function renderMatch(match, prediction) {
   homeBtn.onclick = async () => {
     try {
       await saveGroupPrediction(match.id, "vinst");
-      await loadMatches();
+      homeBtn.classList.add("is-selected");
+      drawBtn.classList.remove("is-selected");
+      awayBtn.classList.remove("is-selected");
     } catch (error) {
       setStatus(`Kunde inte spara gruppspelstippning: ${error.message}`);
     }
@@ -359,7 +392,9 @@ function renderMatch(match, prediction) {
   drawBtn.onclick = async () => {
     try {
       await saveGroupPrediction(match.id, "kryss");
-      await loadMatches();
+      homeBtn.classList.remove("is-selected");
+      drawBtn.classList.add("is-selected");
+      awayBtn.classList.remove("is-selected");
     } catch (error) {
       setStatus(`Kunde inte spara gruppspelstippning: ${error.message}`);
     }
@@ -375,7 +410,9 @@ function renderMatch(match, prediction) {
   awayBtn.onclick = async () => {
     try {
       await saveGroupPrediction(match.id, "forlust");
-      await loadMatches();
+      homeBtn.classList.remove("is-selected");
+      drawBtn.classList.remove("is-selected");
+      awayBtn.classList.add("is-selected");
     } catch (error) {
       setStatus(`Kunde inte spara gruppspelstippning: ${error.message}`);
     }
@@ -428,7 +465,9 @@ async function loadMatches() {
       api("/predictions/status"),
     ]);
     predictionStatus = status;
-    savePlayoffTeamsBtn.disabled = Boolean(predictionStatus.locked);
+    if (savePlayoffTeamsBtn) {
+      savePlayoffTeamsBtn.disabled = Boolean(predictionStatus.locked);
+    }
     setStatus(
       predictionStatus.locked
         ? "Tippningen ar last och kan inte andras."
@@ -484,7 +523,9 @@ function init() {
   requireLogin();
   logoutBtn.addEventListener("click", logout);
   refreshMatchesBtn.addEventListener("click", loadMatches);
-  savePlayoffTeamsBtn.addEventListener("click", savePlayoffTeams);
+  if (savePlayoffTeamsBtn) {
+    savePlayoffTeamsBtn.addEventListener("click", () => savePlayoffTeams());
+  }
   loadMatches();
 }
 
