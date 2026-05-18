@@ -20,8 +20,12 @@ function setApiBase(url) {
 }
 
 function updateLeagueCodeRequirement() {
-  leagueCodeInput.required = leagueSelect.value === "lidingo";
-  leagueCodeInput.placeholder = leagueCodeInput.required ? "Kod for Lidingö" : "";
+  const leagueNames = {
+    slakten: "Slakten",
+    lidingo: "Lidingo",
+  };
+  leagueCodeInput.required = true;
+  leagueCodeInput.placeholder = `Kod for ${leagueNames[leagueSelect.value] || "ligan"}`;
 }
 
 async function api(path, method = "GET", body = undefined) {
