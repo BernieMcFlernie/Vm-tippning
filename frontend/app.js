@@ -201,7 +201,7 @@ async function loadMe() {
     const me = await api("/me");
     const displayName = String(me.display_name || "").trim();
     const league = String(me.league || "").trim();
-    const leagueLabel = league === "lidingo" ? "Lidingö" : "Släkten";
+    const leagueLabel = league === "lidingo" ? "Lidingö" : "Släkt och familjevänner";
     meOutput.textContent = displayName ? `Hej ${displayName} | Liga: ${leagueLabel}` : `Hej | Liga: ${leagueLabel}`;
   } catch (error) {
     if (error.message.includes("401")) {

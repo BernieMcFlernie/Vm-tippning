@@ -23,7 +23,7 @@ DEFAULT_ADMIN_EMAIL = "admin@vm.local"
 DEFAULT_ADMIN_PASSWORD = "changeme"
 DEFAULT_LEAGUE = "slakten"
 LEAGUES = {
-    "slakten": "Släkten",
+    "slakten": "Släkt och familjevänner",
     "lidingo": "Lidingö",
 }
 

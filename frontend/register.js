@@ -21,7 +21,7 @@ function setApiBase(url) {
 
 function updateLeagueCodeRequirement() {
   const leagueNames = {
-    slakten: "Slakten",
+    slakten: "Slakt och familjevanner",
     lidingo: "Lidingo",
   };
   leagueCodeInput.required = true;
