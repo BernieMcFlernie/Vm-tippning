@@ -6,6 +6,7 @@ const leagueSelect = document.getElementById("registerLeague");
 const leagueCodeInput = document.getElementById("registerLeagueCode");
 
 const API_BASE_KEY = "vm_api_base";
+const TOKEN_KEY = "vm_token";
 
 function setStatus(message) {
   statusOutput.textContent = message;
@@ -17,6 +18,10 @@ function getApiBase() {
 
 function setApiBase(url) {
   localStorage.setItem(API_BASE_KEY, url.replace(/\/+$/, ""));
+}
+
+function setToken(token) {
+  localStorage.setItem(TOKEN_KEY, token);
 }
 
 function updateLeagueCodeRequirement() {
@@ -49,6 +54,7 @@ async function registerUser(event) {
   const passwordConfirm = document.getElementById("registerPasswordConfirm").value;
   const league = document.getElementById("registerLeague").value;
   const leagueCode = document.getElementById("registerLeagueCode").value.trim();
+  let accountCreated = false;
 
   if (password !== passwordConfirm) {
     setStatus("Losenorden matchar inte.");
@@ -63,10 +69,19 @@ async function registerUser(event) {
       league,
       league_code: leagueCode,
     });
+    accountCreated = true;
+    const loginResult = await api("/login", "POST", { email, password });
+    if (!loginResult.token) {
+      throw new Error("Ingen token kom tillbaka vid inloggning");
+    }
+    setToken(loginResult.token);
     setStatus(`Konto skapat: ${created.display_name} (${created.email})`);
-    registerForm.reset();
+    window.location.href = "./index.html";
   } catch (error) {
-    setStatus(`Kunde inte skapa konto: ${error.message}`);
+    const prefix = accountCreated
+      ? "Konto skapat, men automatisk inloggning misslyckades"
+      : "Kunde inte skapa konto";
+    setStatus(`${prefix}: ${error.message}`);
   }
 }
 
