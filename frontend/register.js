@@ -28,6 +28,7 @@ function updateLeagueCodeRequirement() {
   const leagueNames = {
     slakten: "Slakt och familjevanner",
     lidingo: "Lidingo",
+    korpen: "Korpen",
   };
   leagueCodeInput.required = true;
   leagueCodeInput.placeholder = `Kod for ${leagueNames[leagueSelect.value] || "ligan"}`;

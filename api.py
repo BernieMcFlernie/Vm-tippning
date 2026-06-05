@@ -121,6 +121,7 @@ PLAYOFF_ROUND_LABELS = {
 LEAGUE_CODES = {
     "slakten": "00",
     "lidingo": "1002",
+    "korpen": "13",
 }
 
 
