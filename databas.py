@@ -25,6 +25,7 @@ DEFAULT_LEAGUE = "slakten"
 LEAGUES = {
     "slakten": "Släkt och familjevänner",
     "lidingo": "Lidingö",
+    "korpen": "Korpen",
 }
 
 
