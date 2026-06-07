@@ -71,6 +71,33 @@ body {
   backdrop-filter: blur(6px);
 }
 
+.info-card {
+  border-left: 5px solid var(--accent);
+}
+
+.info-card p {
+  margin: 0 0 12px;
+  line-height: 1.5;
+}
+
+.info-card h3 {
+  margin: 18px 0 6px;
+  font-size: 1rem;
+}
+
+.info-steps {
+  margin: 0 0 12px;
+  padding-left: 24px;
+}
+
+.info-steps li {
+  margin: 6px 0;
+}
+
+.info-card .help {
+  margin-bottom: 0;
+}
+
 .auth-card {
   max-width: 560px;
 }
