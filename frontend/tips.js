@@ -10,37 +10,37 @@ const TOKEN_KEY = "vm_token";
 const PLAYOFF_ROUNDS = [
   {
     key: "sextondel",
-    label: "Sextondelsfinal",
+    label: "Tippa sextondelsfinal",
     limit: 32,
     explanation: "Här ser du alla lag i gruppspelet. Markera de lag du tror går vidare till sextondelsfinal.",
   },
   {
     key: "attondel",
-    label: "Attondelsfinal",
+    label: "Tippa åttondelsfinal",
     limit: 16,
     explanation: "Här ser du lagen du tippat till sextondelsfinal. Markera de lag du tror går vidare till åttondelsfinal.",
   },
   {
     key: "kvart",
-    label: "Kvartsfinal",
+    label: "Tippa kvartsfinal",
     limit: 8,
     explanation: "Här ser du lagen du tippat till åttondelsfinal. Markera de lag du tror går vidare till kvartsfinal.",
   },
   {
     key: "semi",
-    label: "Semifinal",
+    label: "Tippa semifinal",
     limit: 4,
     explanation: "Här ser du lagen du tippat till kvartsfinal. Markera de lag du tror går vidare till semifinal.",
   },
   {
     key: "final",
-    label: "Final",
+    label: "Tippa final",
     limit: 2,
     explanation: "Här ser du lagen du tippat till semifinal. Markera de lag du tror går vidare till final.",
   },
   {
     key: "vinnare",
-    label: "Vinnare",
+    label: "Tippa vinnare",
     limit: 1,
     explanation: "Här ser du lagen du tippat till final. Markera laget du tror vinner VM.",
   },
