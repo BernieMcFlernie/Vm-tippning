@@ -241,6 +241,13 @@ function renderPlayoffTeamPicker(matches) {
     heading.textContent = `${round.label} (${selected.size}/${round.limit})`;
     section.appendChild(heading);
 
+    if (round.key === "sextondel") {
+      const explanation = document.createElement("p");
+      explanation.className = "help";
+      explanation.textContent = "Här tippar du vilka 32 lag som kommer att spela sextondelsfinal.";
+      section.appendChild(explanation);
+    }
+
     if (candidates.length === 0) {
       const empty = document.createElement("p");
       empty.className = "help";
