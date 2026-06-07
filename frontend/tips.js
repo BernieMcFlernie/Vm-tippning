@@ -8,12 +8,42 @@ const savePlayoffTeamsBtn = document.getElementById("savePlayoffTeamsBtn");
 const API_BASE_KEY = "vm_api_base";
 const TOKEN_KEY = "vm_token";
 const PLAYOFF_ROUNDS = [
-  { key: "sextondel", label: "Sextondelsfinal", limit: 32 },
-  { key: "attondel", label: "Attondelsfinal", limit: 16 },
-  { key: "kvart", label: "Kvartsfinal", limit: 8 },
-  { key: "semi", label: "Semifinal", limit: 4 },
-  { key: "final", label: "Final", limit: 2 },
-  { key: "vinnare", label: "Vinnare", limit: 1 },
+  {
+    key: "sextondel",
+    label: "Sextondelsfinal",
+    limit: 32,
+    explanation: "Här tippar du lagen som spelar sextondelsfinal, inte lagen som vinner där.",
+  },
+  {
+    key: "attondel",
+    label: "Attondelsfinal",
+    limit: 16,
+    explanation: "Här tippar du lagen som spelar åttondelsfinal, inte lagen som vinner där.",
+  },
+  {
+    key: "kvart",
+    label: "Kvartsfinal",
+    limit: 8,
+    explanation: "Här tippar du lagen som spelar kvartsfinal, inte lagen som vinner där.",
+  },
+  {
+    key: "semi",
+    label: "Semifinal",
+    limit: 4,
+    explanation: "Här tippar du lagen som spelar semifinal, inte lagen som vinner där.",
+  },
+  {
+    key: "final",
+    label: "Final",
+    limit: 2,
+    explanation: "Här tippar du lagen som spelar final, inte vilket lag som vinner finalen.",
+  },
+  {
+    key: "vinnare",
+    label: "Vinnare",
+    limit: 1,
+    explanation: "Här tippar du den som vinner.",
+  },
 ];
 const GROUP_LIMITED_ROUNDS = new Set(["sextondel", "attondel"]);
 const MAX_PLAYOFF_TEAMS_PER_GROUP = 3;
@@ -241,12 +271,10 @@ function renderPlayoffTeamPicker(matches) {
     heading.textContent = `${round.label} (${selected.size}/${round.limit})`;
     section.appendChild(heading);
 
-    if (round.key === "sextondel") {
-      const explanation = document.createElement("p");
-      explanation.className = "help";
-      explanation.textContent = "Här tippar du vilka 32 lag som kommer att spela sextondelsfinal.";
-      section.appendChild(explanation);
-    }
+    const explanation = document.createElement("p");
+    explanation.className = "playoff-round-explanation";
+    explanation.textContent = round.explanation;
+    section.appendChild(explanation);
 
     if (candidates.length === 0) {
       const empty = document.createElement("p");
