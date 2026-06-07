@@ -12,37 +12,37 @@ const PLAYOFF_ROUNDS = [
     key: "sextondel",
     label: "Sextondelsfinal",
     limit: 32,
-    explanation: "Här tippar du lagen som spelar sextondelsfinal, inte lagen som vinner där.",
+    explanation: "Här ser du alla lag i gruppspelet. Markera de lag du tror går vidare till sextondelsfinal.",
   },
   {
     key: "attondel",
     label: "Attondelsfinal",
     limit: 16,
-    explanation: "Här tippar du lagen som spelar åttondelsfinal, inte lagen som vinner där.",
+    explanation: "Här ser du lagen du tippat till sextondelsfinal. Markera de lag du tror går vidare till åttondelsfinal.",
   },
   {
     key: "kvart",
     label: "Kvartsfinal",
     limit: 8,
-    explanation: "Här tippar du lagen som spelar kvartsfinal, inte lagen som vinner där.",
+    explanation: "Här ser du lagen du tippat till åttondelsfinal. Markera de lag du tror går vidare till kvartsfinal.",
   },
   {
     key: "semi",
     label: "Semifinal",
     limit: 4,
-    explanation: "Här tippar du lagen som spelar semifinal, inte lagen som vinner där.",
+    explanation: "Här ser du lagen du tippat till kvartsfinal. Markera de lag du tror går vidare till semifinal.",
   },
   {
     key: "final",
     label: "Final",
     limit: 2,
-    explanation: "Här tippar du lagen som spelar final, inte vilket lag som vinner finalen.",
+    explanation: "Här ser du lagen du tippat till semifinal. Markera de lag du tror går vidare till final.",
   },
   {
     key: "vinnare",
     label: "Vinnare",
     limit: 1,
-    explanation: "Här tippar du den som vinner.",
+    explanation: "Här ser du lagen du tippat till final. Markera laget du tror vinner VM.",
   },
 ];
 const GROUP_LIMITED_ROUNDS = new Set(["sextondel", "attondel"]);
