@@ -169,6 +169,18 @@ function groupMatches(matches) {
   return groups;
 }
 
+function scrollToRequestedGroup() {
+  const groupId = window.location.hash.slice(1);
+  if (!groupId) {
+    return;
+  }
+
+  const groupSection = document.getElementById(groupId);
+  if (groupSection) {
+    groupSection.scrollIntoView();
+  }
+}
+
 async function loadMatches() {
   matchesList.innerHTML = "";
   groupNav.innerHTML = "";
@@ -186,6 +198,7 @@ async function loadMatches() {
       groupNav.appendChild(link);
       matchesList.appendChild(renderGroupSection(group));
     });
+    scrollToRequestedGroup();
   } catch (error) {
     if (error.status === 401) {
       clearToken();
@@ -200,6 +213,7 @@ function init() {
   requireLogin();
   logoutBtn.addEventListener("click", logout);
   refreshMatchesBtn.addEventListener("click", loadMatches);
+  window.addEventListener("hashchange", scrollToRequestedGroup);
   loadMatches();
 }
 
