@@ -2,6 +2,7 @@
 const matchesList = document.getElementById("matchesList");
 const logoutBtn = document.getElementById("logoutBtn");
 const refreshMatchesBtn = document.getElementById("refreshMatchesBtn");
+const groupNav = document.getElementById("groupNav");
 
 const API_BASE_KEY = "vm_api_base";
 const TOKEN_KEY = "vm_token";
@@ -112,6 +113,7 @@ function renderMatch(match) {
   toggleBtn.type = "button";
   toggleBtn.className = "match-toggle";
   toggleBtn.textContent = `#${match.id} ${match.home_team} - ${match.away_team} | Resultat: ${formatResult(match)}`;
+  toggleBtn.setAttribute("aria-expanded", "false");
 
   const panel = document.createElement("div");
   panel.className = "match-dropdown";
@@ -121,6 +123,7 @@ function renderMatch(match) {
   toggleBtn.onclick = async () => {
     const shouldOpen = panel.hidden;
     panel.hidden = !shouldOpen;
+    toggleBtn.setAttribute("aria-expanded", String(shouldOpen));
     if (!shouldOpen) {
       return;
     }
@@ -136,15 +139,16 @@ function renderMatch(match) {
   return item;
 }
 
-function renderGroupSection(title, matches) {
+function renderGroupSection(group) {
   const section = document.createElement("section");
   section.className = "stack";
+  section.id = group.id;
 
   const heading = document.createElement("h3");
-  heading.textContent = title;
+  heading.textContent = group.title;
   section.appendChild(heading);
 
-  matches.forEach((match) => {
+  group.matches.forEach((match) => {
     section.appendChild(renderMatch(match));
   });
 
@@ -157,6 +161,7 @@ function groupMatches(matches) {
   for (let index = 0; index < matches.length; index += 6) {
     const groupIndex = Math.floor(index / 6);
     groups.push({
+      id: `grupp-${String(groupNames[groupIndex] || groupIndex + 1).toLowerCase()}`,
       title: `Grupp ${groupNames[groupIndex] || groupIndex + 1}`,
       matches: matches.slice(index, index + 6),
     });
@@ -166,6 +171,7 @@ function groupMatches(matches) {
 
 async function loadMatches() {
   matchesList.innerHTML = "";
+  groupNav.innerHTML = "";
   try {
     const matches = await api("/matches");
     if (!Array.isArray(matches) || matches.length === 0) {
@@ -173,7 +179,12 @@ async function loadMatches() {
       return;
     }
     groupMatches(matches).forEach((group) => {
-      matchesList.appendChild(renderGroupSection(group.title, group.matches));
+      const link = document.createElement("a");
+      link.className = "link-btn";
+      link.href = `#${group.id}`;
+      link.textContent = group.title;
+      groupNav.appendChild(link);
+      matchesList.appendChild(renderGroupSection(group));
     });
   } catch (error) {
     if (error.status === 401) {

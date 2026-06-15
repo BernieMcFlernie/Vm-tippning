@@ -208,9 +208,19 @@ def _player_row_belongs_to_league(row: dict[str, Any], league: str) -> bool:
 
 
 def _league_player_objects(players_data: list[Any], league: str) -> list[tuple[int, Any]]:
+    player_rows_with_ids: list[tuple[int, dict[str, Any]]] = []
+    for row in load_players():
+        try:
+            player_id = int(row.get("id", 0))
+        except (TypeError, ValueError):
+            continue
+        if player_id > 0:
+            player_rows_with_ids.append((player_id, row))
+    player_rows_with_ids.sort(key=lambda item: item[0])
+
     return [
         (player_id, player)
-        for player_id, player in enumerate(players_data, start=1)
+        for (player_id, _), player in zip(player_rows_with_ids, players_data)
         if normalize_league(getattr(player, "league", None)) == league
     ]
 

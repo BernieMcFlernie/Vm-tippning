@@ -13,6 +13,10 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
   font-family: "Segoe UI", "Trebuchet MS", sans-serif;
@@ -239,6 +243,25 @@ button.is-selected {
   margin-top: 8px;
   display: grid;
   gap: 6px;
+}
+
+.group-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.group-nav .link-btn {
+  padding: 8px 12px;
+}
+
+.group-nav + button {
+  margin-top: 0;
+}
+
+.stack[id] {
+  scroll-margin-top: 16px;
 }
 
 .prediction-item {
