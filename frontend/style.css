@@ -245,6 +245,10 @@ button.is-selected {
   gap: 6px;
 }
 
+.match-dropdown[hidden] {
+  display: none;
+}
+
 .group-nav {
   display: flex;
   flex-wrap: wrap;

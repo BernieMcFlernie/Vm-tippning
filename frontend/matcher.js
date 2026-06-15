@@ -109,10 +109,11 @@ function renderMatch(match) {
   const item = document.createElement("article");
   item.className = "table-item";
 
+  const matchText = `#${match.id} ${match.home_team} - ${match.away_team} | Resultat: ${formatResult(match)}`;
   const toggleBtn = document.createElement("button");
   toggleBtn.type = "button";
   toggleBtn.className = "match-toggle";
-  toggleBtn.textContent = `#${match.id} ${match.home_team} - ${match.away_team} | Resultat: ${formatResult(match)}`;
+  toggleBtn.textContent = `${matchText} | Visa tippningar`;
   toggleBtn.setAttribute("aria-expanded", "false");
 
   const panel = document.createElement("div");
@@ -124,6 +125,7 @@ function renderMatch(match) {
     const shouldOpen = panel.hidden;
     panel.hidden = !shouldOpen;
     toggleBtn.setAttribute("aria-expanded", String(shouldOpen));
+    toggleBtn.textContent = `${matchText} | ${shouldOpen ? "Dolj tippningar" : "Visa tippningar"}`;
     if (!shouldOpen) {
       return;
     }
