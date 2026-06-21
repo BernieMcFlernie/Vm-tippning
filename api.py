@@ -1115,12 +1115,14 @@ def playoff_facit(user: dict[str, Any] = Depends(_require_user)) -> dict[str, An
     for team in all_teams:
         round_details = []
         for round_key in PLAYOFF_ROUNDS:
-            stats = team_stats.get(round_key, {}).get(team, {"count": 0, "players": []})
+            round_stats = team_stats.get(round_key, {})
+            stats = round_stats.get(team, {"count": 0, "players": []})
             round_details.append(
                 {
                     "key": round_key,
                     "label": PLAYOFF_ROUND_LABELS.get(round_key, round_key),
                     "picked_count": int(stats.get("count", 0)),
+                    "points_awarded": _playoff_points_for_team(total_players, round_stats, team),
                     "players": stats.get("players", []),
                     "is_correct": team in actual_rounds.get(round_key, []),
                 }

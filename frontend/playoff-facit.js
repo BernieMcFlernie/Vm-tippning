@@ -155,7 +155,7 @@ function selectTeam(teamName) {
       item.classList.add("is-correct");
     }
     const players = Array.isArray(round.players) ? round.players.map((player) => player.name).join(", ") : "";
-    item.textContent = `${round.label}: ${round.picked_count} tippade laget${players ? ` - ${players}` : ""}`;
+    item.textContent = `${round.label}: ${round.picked_count} tippade laget${players ? ` - ${players}` : ""} | Poang: ${formatPoints(round.points_awarded)}`;
     teamDetails.appendChild(item);
   });
 }
