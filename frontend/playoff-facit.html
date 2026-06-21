@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VM Tippning - Slutspelsfacit</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <main class="page playoff-page">
+    <header class="hero">
+      <div class="hero-copy">
+        <h1>Slutspelsfacit</h1>
+        <p>Facit for alla lag, hur manga som tippade dem och vilka spelare det var.</p>
+      </div>
+      <button id="logoutBtn" type="button" class="logout-corner">Logga ut</button>
+    </header>
+
+    <section class="card">
+      <a class="link-btn" href="./index.html">Till startsidan</a>
+    </section>
+
+    <section class="card">
+      <h2>Facittrad</h2>
+      <div id="facitTree" class="playoff-tree"></div>
+    </section>
+
+    <section class="card">
+      <h2>Lag</h2>
+      <input id="teamSearch" type="search" placeholder="Sok lag">
+      <div id="teamList" class="team-list"></div>
+    </section>
+
+    <section class="card">
+      <h2 id="teamDetailTitle">Valj ett lag</h2>
+      <div id="teamDetails" class="stack"></div>
+    </section>
+
+    <section class="card">
+      <h2>Status</h2>
+      <pre id="statusOutput">Klar.</pre>
+    </section>
+  </main>
+
+  <script src="./playoff-facit.js"></script>
+</body>
+</html>

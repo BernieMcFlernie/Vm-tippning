@@ -3,6 +3,8 @@ const meOutput = document.getElementById("meOutput");
 const tableList = document.getElementById("tableList");
 const logoutBtn = document.getElementById("logoutBtn");
 const refreshTableBtn = document.getElementById("refreshTableBtn");
+const correctList = document.getElementById("correctList");
+const refreshCorrectBtn = document.getElementById("refreshCorrectBtn");
 
 const API_BASE_KEY = "vm_api_base";
 const TOKEN_KEY = "vm_token";
@@ -238,6 +240,14 @@ async function loadTable() {
       button.className = "table-row-btn";
       button.textContent = "Visa tippning";
 
+      const playoffButton = document.createElement("a");
+      playoffButton.className = "table-row-btn link-btn compact-link";
+      playoffButton.href = `./playoff.html?player_id=${encodeURIComponent(row.player_id)}`;
+      playoffButton.textContent = "Visa slutspelstrad";
+
+      const actions = document.createElement("div");
+      actions.className = "table-row-actions";
+
       const details = document.createElement("div");
       details.className = "table-details";
       details.hidden = true;
@@ -274,7 +284,9 @@ async function loadTable() {
       });
 
       header.appendChild(text);
-      header.appendChild(button);
+      actions.appendChild(button);
+      actions.appendChild(playoffButton);
+      header.appendChild(actions);
       el.appendChild(header);
       el.appendChild(details);
       tableList.appendChild(el);
@@ -284,13 +296,34 @@ async function loadTable() {
   }
 }
 
+async function loadCorrectCounts() {
+  correctList.innerHTML = "";
+  try {
+    const rows = await api("/correct-counts");
+    if (!Array.isArray(rows) || rows.length === 0) {
+      correctList.textContent = "Inga spelare hittades.";
+      return;
+    }
+    rows.forEach((row) => {
+      const item = document.createElement("article");
+      item.className = "table-item";
+      item.textContent = `${row.position}. ${row.name} - ${row.total_correct} ratt (${row.match_correct} matcher, ${row.playoff_correct} slutspel)`;
+      correctList.appendChild(item);
+    });
+  } catch (error) {
+    setStatus(`Kunde inte hamta antal ratt: ${error.message}`);
+  }
+}
+
 function init() {
   requireLogin();
   logoutBtn.addEventListener("click", logout);
   refreshTableBtn.addEventListener("click", loadTable);
+  refreshCorrectBtn.addEventListener("click", loadCorrectCounts);
 
   loadMe();
   loadTable();
+  loadCorrectCounts();
 }
 
 init();

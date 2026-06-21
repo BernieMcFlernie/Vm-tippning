@@ -402,6 +402,68 @@ def _save_playoff_results_rounds(rounds: dict[str, list[str]]) -> None:
     )
 
 
+def _league_players_for_user(user: dict[str, Any]) -> tuple[str, list[tuple[int, Any]]]:
+    _matches_data, players_data = las_fran_json()
+    league = _user_league(user)
+    return league, _league_player_objects(players_data, league)
+
+
+def _playoff_team_stats(league_players: list[tuple[int, Any]]) -> dict[str, dict[str, dict[str, Any]]]:
+    stats: dict[str, dict[str, dict[str, Any]]] = {round_key: {} for round_key in PLAYOFF_ROUNDS}
+    for player_id, player in league_players:
+        player_name = str(getattr(player, "name", "")).strip() or f"Spelare {player_id}"
+        for round_key in PLAYOFF_ROUNDS:
+            teams = getattr(player, "slutspel_lag", {}).get(round_key, [])
+            if not isinstance(teams, list):
+                continue
+            for team in teams:
+                normalized_team = str(team).strip()
+                if not normalized_team:
+                    continue
+                team_stats = stats[round_key].setdefault(
+                    normalized_team,
+                    {"team": normalized_team, "count": 0, "players": []},
+                )
+                team_stats["count"] += 1
+                team_stats["players"].append({"player_id": player_id, "name": player_name})
+    return stats
+
+
+def _playoff_points_for_team(
+    total_players: int,
+    round_stats: dict[str, dict[str, Any]],
+    team: str,
+) -> float:
+    count = int(round_stats.get(team, {}).get("count", 0))
+    if count <= 0:
+        return 0.0
+    return float(total_players / count)
+
+
+def _count_correct_for_player(player: Any, matches_data: list[Any], playoff_results: dict[str, list[str]]) -> dict[str, int]:
+    match_correct = 0
+    for match in matches_data:
+        prediction = player.prediction_for(match)
+        if prediction is not None and prediction.is_correct():
+            match_correct += 1
+
+    playoff_correct = 0
+    for round_key in PLAYOFF_ROUNDS:
+        correct_teams = set(playoff_results.get(round_key, []))
+        if not correct_teams:
+            continue
+        predicted_teams = getattr(player, "slutspel_lag", {}).get(round_key, [])
+        if not isinstance(predicted_teams, list):
+            continue
+        playoff_correct += sum(1 for team in predicted_teams if team in correct_teams)
+
+    return {
+        "match_correct": match_correct,
+        "playoff_correct": playoff_correct,
+        "total_correct": match_correct + playoff_correct,
+    }
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
@@ -666,6 +728,66 @@ def predictions_for_player(
         ] if isinstance(player_row.get("attondels_lag", []), list) else [],
         "playoff_predictions": _playoff_rounds_from_player(player_row),
         "predictions": rows,
+    }
+
+
+@app.get("/playoff-tree/player/{player_id}")
+def playoff_tree_for_player(
+    player_id: int,
+    user: dict[str, Any] = Depends(_require_user),
+) -> dict[str, Any]:
+    _require_predictions_visible()
+    league = _user_league(user)
+    players_data = load_players()
+    player_row: dict[str, Any] | None = None
+    for row in players_data:
+        try:
+            current_player_id = int(row.get("id", 0))
+        except (TypeError, ValueError):
+            continue
+        if current_player_id == player_id and _player_row_belongs_to_league(row, league):
+            player_row = row
+            break
+    if player_row is None:
+        raise HTTPException(status_code=404, detail="Spelaren hittades inte")
+
+    _matches_data, player_objects = las_fran_json()
+    league_players = _league_player_objects(player_objects, league)
+    total_players = len(league_players) if league_players else 1
+    team_stats = _playoff_team_stats(league_players)
+    actual_rounds = _load_playoff_results_rounds()
+    player_rounds = _playoff_rounds_from_player(player_row)
+
+    rounds: list[dict[str, Any]] = []
+    for round_key in PLAYOFF_ROUNDS:
+        round_stats = team_stats.get(round_key, {})
+        teams = []
+        for team in player_rounds.get(round_key, []):
+            team_name = str(team).strip()
+            if not team_name:
+                continue
+            stats = round_stats.get(team_name, {"count": 0, "players": []})
+            teams.append(
+                {
+                    "team": team_name,
+                    "picked_count": int(stats.get("count", 0)),
+                    "points_if_correct": _playoff_points_for_team(total_players, round_stats, team_name),
+                    "is_correct": team_name in actual_rounds.get(round_key, []),
+                }
+            )
+        rounds.append(
+            {
+                "key": round_key,
+                "label": PLAYOFF_ROUND_LABELS.get(round_key, round_key),
+                "teams": teams,
+            }
+        )
+
+    return {
+        "player_id": player_id,
+        "player_name": str(player_row.get("name", "")).strip() or f"Spelare {player_id}",
+        "total_players": total_players,
+        "rounds": rounds,
     }
 
 
@@ -958,6 +1080,61 @@ def my_facit(user: dict[str, Any] = Depends(_require_user)) -> list[dict[str, An
     return rows
 
 
+@app.get("/facit/playoff")
+def playoff_facit(user: dict[str, Any] = Depends(_require_user)) -> dict[str, Any]:
+    _require_predictions_visible()
+    league, league_players = _league_players_for_user(user)
+    total_players = len(league_players) if league_players else 1
+    team_stats = _playoff_team_stats(league_players)
+    actual_rounds = _load_playoff_results_rounds()
+    all_teams = sorted(_valid_playoff_teams(), key=lambda team: team.lower())
+
+    rounds: list[dict[str, Any]] = []
+    for round_key in PLAYOFF_ROUNDS:
+        round_stats = team_stats.get(round_key, {})
+        teams = []
+        for team in actual_rounds.get(round_key, []):
+            stats = round_stats.get(team, {"count": 0, "players": []})
+            teams.append(
+                {
+                    "team": team,
+                    "picked_count": int(stats.get("count", 0)),
+                    "points_awarded": _playoff_points_for_team(total_players, round_stats, team),
+                    "players": stats.get("players", []),
+                }
+            )
+        rounds.append(
+            {
+                "key": round_key,
+                "label": PLAYOFF_ROUND_LABELS.get(round_key, round_key),
+                "teams": teams,
+            }
+        )
+
+    team_details: list[dict[str, Any]] = []
+    for team in all_teams:
+        round_details = []
+        for round_key in PLAYOFF_ROUNDS:
+            stats = team_stats.get(round_key, {}).get(team, {"count": 0, "players": []})
+            round_details.append(
+                {
+                    "key": round_key,
+                    "label": PLAYOFF_ROUND_LABELS.get(round_key, round_key),
+                    "picked_count": int(stats.get("count", 0)),
+                    "players": stats.get("players", []),
+                    "is_correct": team in actual_rounds.get(round_key, []),
+                }
+            )
+        team_details.append({"team": team, "rounds": round_details})
+
+    return {
+        "league": league,
+        "total_players": total_players,
+        "rounds": rounds,
+        "teams": team_details,
+    }
+
+
 @app.get("/matches")
 def matches(_: dict[str, Any] = Depends(_require_user)) -> list[dict[str, Any]]:
     matches_data, _ = las_fran_json()
@@ -1092,6 +1269,33 @@ def predictions_for_match(
         )
 
     rows.sort(key=lambda item: str(item.get("player_name", "")).lower())
+    return rows
+
+
+@app.get("/correct-counts")
+def correct_counts(user: dict[str, Any] = Depends(_require_user)) -> list[dict[str, Any]]:
+    matches_data, players_data = las_fran_json()
+    league = _user_league(user)
+    league_players = _league_player_objects(players_data, league)
+    playoff_results = _load_playoff_results_rounds()
+
+    rows: list[dict[str, Any]] = []
+    for player_id, player in league_players:
+        counts = _count_correct_for_player(player, matches_data, playoff_results)
+        rows.append(
+            {
+                "player_id": player_id,
+                "name": player.name,
+                "match_correct": counts["match_correct"],
+                "playoff_correct": counts["playoff_correct"],
+                "total_correct": counts["total_correct"],
+                "league": league,
+            }
+        )
+
+    rows.sort(key=lambda item: (-int(item.get("total_correct", 0)), str(item.get("name", "")).lower()))
+    for position, row in enumerate(rows, start=1):
+        row["position"] = position
     return rows
 
 
