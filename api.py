@@ -176,6 +176,7 @@ ADVANCING_ROUND_BY_STAGE = {
     "FINAL": "vinnare",
 }
 BIG_WINNER_THRESHOLD = 3.0
+MATCH_DAY_NIGHT_CUTOFF_HOUR = 6
 
 LEAGUE_CODES = {
     "slakten": "00",
@@ -633,6 +634,13 @@ def _parse_schedule_datetime(value: Any) -> datetime | None:
     return parsed.astimezone(STOCKHOLM_TZ)
 
 
+def _schedule_match_day(local_datetime: datetime) -> date:
+    match_day = local_datetime.date()
+    if local_datetime.hour < MATCH_DAY_NIGHT_CUTOFF_HOUR:
+        return match_day + timedelta(days=1)
+    return match_day
+
+
 def _rounds_remaining_from_stage(stage: Any) -> list[str]:
     stage_key = str(stage or "").strip().upper()
     first_round = ADVANCING_ROUND_BY_STAGE.get(stage_key, "sextondel")
@@ -700,6 +708,7 @@ def _schedule_match_response(
         "local_match_id": row.get("local_match_id"),
         "utc_date": row.get("utc_date"),
         "local_date": local_datetime.date().isoformat() if local_datetime else None,
+        "match_day": _schedule_match_day(local_datetime).isoformat() if local_datetime else None,
         "local_time": local_datetime.strftime("%H:%M") if local_datetime else None,
         "status": row.get("status"),
         "stage": stage,
@@ -1479,7 +1488,7 @@ def todays_matches(
     matches_for_day: list[dict[str, Any]] = []
     for row in load_match_schedule():
         local_datetime = _parse_schedule_datetime(row.get("utc_date"))
-        if local_datetime is None or local_datetime.date() != target_date:
+        if local_datetime is None or _schedule_match_day(local_datetime) != target_date:
             continue
         matches_for_day.append(
             _schedule_match_response(row, total_players, league_players, team_stats)
