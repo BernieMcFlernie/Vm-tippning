@@ -207,6 +207,42 @@ button.is-selected {
   padding: 10px;
 }
 
+.today-match {
+  display: grid;
+  gap: 8px;
+}
+
+.today-match .help {
+  margin: 0;
+}
+
+.today-teams-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+}
+
+.today-team {
+  border: 1px solid #d1dde8;
+  border-radius: 8px;
+  padding: 10px;
+  background: #ffffff80;
+}
+
+.today-team h4 {
+  margin: 0 0 6px;
+  font-size: 1rem;
+}
+
+.compact-list {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.compact-list li {
+  margin: 4px 0;
+}
+
 .table-row {
   display: flex;
   align-items: center;
@@ -548,6 +584,16 @@ button.is-selected {
 .team-list-button {
   margin-top: 0;
   background: linear-gradient(120deg, #0f766e, #2563eb);
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.button-row button {
+  width: auto;
 }
 
 pre {

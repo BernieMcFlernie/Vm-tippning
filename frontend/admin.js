@@ -2,6 +2,7 @@ const statusOutput = document.getElementById("statusOutput");
 const loginCard = document.getElementById("loginCard");
 const settingsPanel = document.getElementById("settingsPanel");
 const adminPanel = document.getElementById("adminPanel");
+const footballDataPanel = document.getElementById("footballDataPanel");
 const playoffPanel = document.getElementById("playoffPanel");
 const predictionsPanel = document.getElementById("predictionsPanel");
 const adminPassword = document.getElementById("adminPassword");
@@ -16,6 +17,9 @@ const matchesAdminList = document.getElementById("matchesAdminList");
 const adminPredictionsList = document.getElementById("adminPredictionsList");
 const playoffResultsList = document.getElementById("playoffResultsList");
 const savePlayoffBtn = document.getElementById("savePlayoffBtn");
+const footballDataStatusBtn = document.getElementById("footballDataStatusBtn");
+const footballDataSyncBtn = document.getElementById("footballDataSyncBtn");
+const footballDataStatusOutput = document.getElementById("footballDataStatusOutput");
 
 const API_BASE_KEY = "vm_api_base";
 const ADMIN_TOKEN_KEY = "vm_admin_token";
@@ -81,6 +85,7 @@ function showAdminPanel() {
   loginCard.hidden = true;
   settingsPanel.hidden = false;
   adminPanel.hidden = false;
+  footballDataPanel.hidden = false;
   playoffPanel.hidden = false;
   predictionsPanel.hidden = false;
   logoutBtn.hidden = false;
@@ -90,6 +95,7 @@ function showLogin() {
   loginCard.hidden = false;
   settingsPanel.hidden = true;
   adminPanel.hidden = true;
+  footballDataPanel.hidden = true;
   playoffPanel.hidden = true;
   predictionsPanel.hidden = true;
   logoutBtn.hidden = true;
@@ -107,6 +113,7 @@ async function login() {
     showAdminPanel();
     await loadPredictionSettings();
     await loadFacit();
+    await loadFootballDataStatus();
     await loadAllPredictions();
     setStatus("Inloggad.");
   } catch (error) {
@@ -314,6 +321,61 @@ async function savePredictionSettings() {
   }
 }
 
+function renderFootballDataStatus(status) {
+  const lines = [
+    `API-nyckel: ${status.configured ? "konfigurerad" : "saknas"}`,
+    `Automatisk sync: ${status.enabled ? "pa" : "av"}`,
+    `Kor just nu: ${status.running ? "ja" : "nej"}`,
+    `Intervall: ${status.interval_seconds || "-"} sekunder`,
+    `Senast startad: ${status.last_started_at || "-"}`,
+    `Senast klar: ${status.last_finished_at || "-"}`,
+    `Senast lyckad: ${status.last_success == null ? "-" : status.last_success ? "ja" : "nej"}`,
+    `Senaste fel: ${status.last_error || "-"}`,
+  ];
+
+  const result = status.last_result;
+  if (result) {
+    lines.push(`Matchningar: ${result.matched_finished_matches ?? "-"}`);
+    lines.push(`Uppdaterade matcher: ${result.updated_matches ?? "-"}`);
+    lines.push(`Sparade schemamatcher: ${result.saved_schedule_matches ?? "-"}`);
+    lines.push(`Uppdaterade slutspelslag: ${result.updated_playoff_results ? "ja" : "nej"}`);
+    if (result.standings_error) {
+      lines.push(`Standings-varning: ${result.standings_error}`);
+    }
+  }
+  footballDataStatusOutput.textContent = lines.join("\n");
+}
+
+async function loadFootballDataStatus() {
+  try {
+    const status = await api("/admin/football-data/status");
+    renderFootballDataStatus(status);
+  } catch (error) {
+    if (error.status === 401 || error.status === 403) {
+      logout();
+      return;
+    }
+    footballDataStatusOutput.textContent = `Kunde inte hamta sync-status: ${error.message}`;
+  }
+}
+
+async function syncFootballDataNow() {
+  try {
+    footballDataStatusOutput.textContent = "Synkar...";
+    const data = await api("/admin/football-data/sync", "POST");
+    renderFootballDataStatus(data.status || {});
+    await loadFacit();
+    setStatus("Synk fran football-data.org klar.");
+  } catch (error) {
+    if (error.status === 401 || error.status === 403) {
+      logout();
+      return;
+    }
+    footballDataStatusOutput.textContent = `Kunde inte synka: ${error.message}`;
+    setStatus(`Kunde inte synka fran football-data.org: ${error.message}`);
+  }
+}
+
 function renderPlayoffPredictionSummary(rounds) {
   return PLAYOFF_ROUNDS
     .map((round) => {
@@ -430,6 +492,8 @@ function init() {
   refreshPredictionsBtn.addEventListener("click", loadAllPredictions);
   saveSettingsBtn.addEventListener("click", savePredictionSettings);
   savePlayoffBtn.addEventListener("click", savePlayoffResults);
+  footballDataStatusBtn.addEventListener("click", loadFootballDataStatus);
+  footballDataSyncBtn.addEventListener("click", syncFootballDataNow);
   adminPassword.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
       login();
@@ -440,6 +504,7 @@ function init() {
     showAdminPanel();
     loadPredictionSettings();
     loadFacit();
+    loadFootballDataStatus();
     loadAllPredictions();
   } else {
     showLogin();

@@ -12,6 +12,7 @@ from typing import Any, List, Optional
 BASE_DIR = Path(__file__).parent
 DATA_DIR = BASE_DIR / "data"
 MATCHES_FILE = DATA_DIR / "matches.json"
+MATCH_SCHEDULE_FILE = DATA_DIR / "match_schedule.json"
 PREDICTIONS_FILE = DATA_DIR / "predictions.json"
 PLAYOFF_RESULTS_FILE = DATA_DIR / "playoff_results.json"
 PLAYERS_FILE = DATA_DIR / "players.json"
@@ -95,6 +96,7 @@ def _ensure_files_exist() -> None:
     DATA_DIR.mkdir(exist_ok=True)
     for file_path in (
         MATCHES_FILE,
+        MATCH_SCHEDULE_FILE,
         PREDICTIONS_FILE,
         PLAYOFF_RESULTS_FILE,
         PLAYERS_FILE,
@@ -181,6 +183,14 @@ def load_matches() -> List[dict[str, Any]]:
 
 def save_matches(rows: List[dict[str, Any]]) -> None:
     _write_json_array(MATCHES_FILE, rows)
+
+
+def load_match_schedule() -> List[dict[str, Any]]:
+    return _read_json_array(MATCH_SCHEDULE_FILE)
+
+
+def save_match_schedule(rows: List[dict[str, Any]]) -> None:
+    _write_json_array(MATCH_SCHEDULE_FILE, rows)
 
 
 def load_predictions() -> List[dict[str, Any]]:

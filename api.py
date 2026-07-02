@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import asyncio
+from datetime import date, datetime, timedelta, timezone, tzinfo
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,18 +20,30 @@ from auth import (
     logga_ut,
     skapa_anvandare,
 )
+from football_data_sync import (
+    calculate_playoff_rounds,
+    configured_token,
+    fetch_football_data,
+    merge_playoff_rounds,
+    schedule_rows_from_api,
+    sync_interval_seconds,
+    update_matches_from_api,
+    utc_now_iso,
+)
 from match import PLAYOFF_ROUNDS, las_fran_json, rakna_tabell
 from databas import (
     LEAGUES,
     find_user_by_display_name,
     find_user_by_email,
     load_matches,
+    load_match_schedule,
     load_players,
     load_playoff_results,
     load_predictions,
     load_settings,
     normalize_league,
     save_matches,
+    save_match_schedule,
     save_players,
     save_playoff_results,
     save_predictions,
@@ -45,6 +60,16 @@ app.add_middleware(
 )
 security = HTTPBearer(auto_error=False)
 FRONTEND_DIR = Path(__file__).resolve().parent / "frontend"
+FOOTBALL_DATA_SYNC_STATE: dict[str, Any] = {
+    "enabled": False,
+    "running": False,
+    "last_started_at": None,
+    "last_finished_at": None,
+    "last_success": None,
+    "last_error": None,
+    "last_result": None,
+}
+football_data_sync_task: asyncio.Task[None] | None = None
 
 
 class LoginRequest(BaseModel):
@@ -117,6 +142,40 @@ PLAYOFF_ROUND_LABELS = {
     "final": "Final",
     "vinnare": "Vinnare",
 }
+
+def _load_stockholm_timezone() -> tzinfo:
+    try:
+        return ZoneInfo("Europe/Stockholm")
+    except ZoneInfoNotFoundError:
+        return timezone(timedelta(hours=2), name="Europe/Stockholm")
+
+
+STOCKHOLM_TZ = _load_stockholm_timezone()
+STAGE_LABELS = {
+    "GROUP_STAGE": "Gruppspel",
+    "LAST_32": "Sextondelsfinal",
+    "ROUND_OF_32": "Sextondelsfinal",
+    "LAST_16": "Attondelsfinal",
+    "ROUND_OF_16": "Attondelsfinal",
+    "QUARTER_FINALS": "Kvartsfinal",
+    "QUARTER_FINAL": "Kvartsfinal",
+    "SEMI_FINALS": "Semifinal",
+    "SEMI_FINAL": "Semifinal",
+    "FINAL": "Final",
+}
+ADVANCING_ROUND_BY_STAGE = {
+    "GROUP_STAGE": "sextondel",
+    "LAST_32": "attondel",
+    "ROUND_OF_32": "attondel",
+    "LAST_16": "kvart",
+    "ROUND_OF_16": "kvart",
+    "QUARTER_FINALS": "semi",
+    "QUARTER_FINAL": "semi",
+    "SEMI_FINALS": "final",
+    "SEMI_FINAL": "final",
+    "FINAL": "vinnare",
+}
+BIG_WINNER_THRESHOLD = 3.0
 
 LEAGUE_CODES = {
     "slakten": "00",
@@ -402,6 +461,125 @@ def _save_playoff_results_rounds(rounds: dict[str, list[str]]) -> None:
     )
 
 
+def _football_data_status_response() -> dict[str, Any]:
+    return {
+        **FOOTBALL_DATA_SYNC_STATE,
+        "configured": bool(configured_token()),
+        "interval_seconds": sync_interval_seconds(),
+    }
+
+
+def _sync_with_football_data() -> dict[str, Any]:
+    token = configured_token()
+    if not token:
+        raise HTTPException(
+            status_code=400,
+            detail="FOOTBALL_DATA_API_TOKEN saknas i serverns miljo.",
+        )
+
+    FOOTBALL_DATA_SYNC_STATE.update(
+        {
+            "enabled": True,
+            "running": True,
+            "last_started_at": utc_now_iso(),
+            "last_error": None,
+        }
+    )
+    try:
+        matches_payload = fetch_football_data("/competitions/WC/matches", token)
+        standings_payload: dict[str, Any] | None = None
+        standings_error: str | None = None
+        try:
+            standings_payload = fetch_football_data("/competitions/WC/standings", token)
+        except RuntimeError as error:
+            standings_error = str(error)
+
+        api_matches = matches_payload.get("matches", [])
+        if not isinstance(api_matches, list):
+            raise RuntimeError("football-data.org skickade ingen matchlista")
+
+        local_matches = load_matches()
+        match_result = update_matches_from_api(local_matches, api_matches)
+        if match_result["updated_matches"] > 0:
+            save_matches(local_matches)
+        schedule_rows = schedule_rows_from_api(local_matches, api_matches)
+        save_match_schedule(schedule_rows)
+
+        automatic_rounds = calculate_playoff_rounds(local_matches, api_matches, standings_payload)
+        current_rounds = _load_playoff_results_rounds()
+        merged_rounds = merge_playoff_rounds(current_rounds, automatic_rounds)
+        if merged_rounds != current_rounds:
+            _save_playoff_results_rounds(merged_rounds)
+
+        result = {
+            **match_result,
+            "saved_schedule_matches": len(schedule_rows),
+            "updated_playoff_results": merged_rounds != current_rounds,
+            "playoff_results": merged_rounds,
+            "standings_error": standings_error,
+        }
+        FOOTBALL_DATA_SYNC_STATE.update(
+            {
+                "running": False,
+                "last_finished_at": utc_now_iso(),
+                "last_success": True,
+                "last_error": None,
+                "last_result": result,
+            }
+        )
+        return result
+    except HTTPException:
+        FOOTBALL_DATA_SYNC_STATE.update(
+            {
+                "running": False,
+                "last_finished_at": utc_now_iso(),
+                "last_success": False,
+            }
+        )
+        raise
+    except Exception as error:
+        FOOTBALL_DATA_SYNC_STATE.update(
+            {
+                "running": False,
+                "last_finished_at": utc_now_iso(),
+                "last_success": False,
+                "last_error": str(error),
+            }
+        )
+        raise HTTPException(status_code=502, detail=str(error)) from error
+
+
+async def _football_data_sync_loop() -> None:
+    while True:
+        try:
+            _sync_with_football_data()
+        except Exception:
+            pass
+        await asyncio.sleep(sync_interval_seconds())
+
+
+@app.on_event("startup")
+async def start_football_data_sync() -> None:
+    global football_data_sync_task
+    FOOTBALL_DATA_SYNC_STATE["enabled"] = bool(configured_token())
+    if not configured_token() or football_data_sync_task is not None:
+        return
+    football_data_sync_task = asyncio.create_task(_football_data_sync_loop())
+
+
+@app.on_event("shutdown")
+async def stop_football_data_sync() -> None:
+    global football_data_sync_task
+    if football_data_sync_task is None:
+        return
+    football_data_sync_task.cancel()
+    try:
+        await football_data_sync_task
+    except asyncio.CancelledError:
+        pass
+    football_data_sync_task = None
+
+
 def _league_players_for_user(user: dict[str, Any]) -> tuple[str, list[tuple[int, Any]]]:
     _matches_data, players_data = las_fran_json()
     league = _user_league(user)
@@ -438,6 +616,119 @@ def _playoff_points_for_team(
     if count <= 0:
         return 0.0
     return float(total_players / count)
+
+
+def _parse_schedule_datetime(value: Any) -> datetime | None:
+    raw_value = str(value or "").strip()
+    if not raw_value:
+        return None
+    if raw_value.endswith("Z"):
+        raw_value = f"{raw_value[:-1]}+00:00"
+    try:
+        parsed = datetime.fromisoformat(raw_value)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(STOCKHOLM_TZ)
+
+
+def _rounds_remaining_from_stage(stage: Any) -> list[str]:
+    stage_key = str(stage or "").strip().upper()
+    first_round = ADVANCING_ROUND_BY_STAGE.get(stage_key, "sextondel")
+    if first_round not in PLAYOFF_ROUNDS:
+        return []
+    start_index = list(PLAYOFF_ROUNDS).index(first_round)
+    return list(PLAYOFF_ROUNDS[start_index:])
+
+
+def _team_big_winners(
+    team: str,
+    stage: Any,
+    total_players: int,
+    league_players: list[tuple[int, Any]],
+    team_stats: dict[str, dict[str, dict[str, Any]]],
+) -> list[dict[str, Any]]:
+    remaining_rounds = _rounds_remaining_from_stage(stage)
+    winners: list[dict[str, Any]] = []
+    for player_id, player in league_players:
+        round_hits: list[dict[str, Any]] = []
+        total_points = 0.0
+        player_rounds = getattr(player, "slutspel_lag", {})
+        if not isinstance(player_rounds, dict):
+            continue
+        for round_key in remaining_rounds:
+            teams = player_rounds.get(round_key, [])
+            if not isinstance(teams, list) or team not in teams:
+                continue
+            points = _playoff_points_for_team(total_players, team_stats.get(round_key, {}), team)
+            if points <= 0:
+                continue
+            total_points += points
+            round_hits.append(
+                {
+                    "round": round_key,
+                    "label": PLAYOFF_ROUND_LABELS.get(round_key, round_key),
+                    "points": points,
+                }
+            )
+        if total_points >= BIG_WINNER_THRESHOLD:
+            winners.append(
+                {
+                    "player_id": player_id,
+                    "name": str(getattr(player, "name", "")).strip() or f"Spelare {player_id}",
+                    "points": total_points,
+                    "rounds": round_hits,
+                }
+            )
+    winners.sort(key=lambda row: (-float(row.get("points", 0)), str(row.get("name", "")).lower()))
+    return winners
+
+
+def _schedule_match_response(
+    row: dict[str, Any],
+    total_players: int,
+    league_players: list[tuple[int, Any]],
+    team_stats: dict[str, dict[str, dict[str, Any]]],
+) -> dict[str, Any]:
+    local_datetime = _parse_schedule_datetime(row.get("utc_date"))
+    stage = str(row.get("stage", "")).strip().upper()
+    home_team = str(row.get("home_team", "")).strip()
+    away_team = str(row.get("away_team", "")).strip()
+    return {
+        "external_id": row.get("external_id"),
+        "local_match_id": row.get("local_match_id"),
+        "utc_date": row.get("utc_date"),
+        "local_date": local_datetime.date().isoformat() if local_datetime else None,
+        "local_time": local_datetime.strftime("%H:%M") if local_datetime else None,
+        "status": row.get("status"),
+        "stage": stage,
+        "stage_label": STAGE_LABELS.get(stage, stage or "Match"),
+        "group": row.get("group"),
+        "matchday": row.get("matchday"),
+        "home_team": home_team,
+        "away_team": away_team,
+        "home_goals": row.get("home_goals"),
+        "away_goals": row.get("away_goals"),
+        "advancing_rounds": [
+            {"key": round_key, "label": PLAYOFF_ROUND_LABELS.get(round_key, round_key)}
+            for round_key in _rounds_remaining_from_stage(stage)
+        ],
+        "teams": [
+            {
+                "team": team,
+                "big_winners": _team_big_winners(
+                    team,
+                    stage,
+                    total_players,
+                    league_players,
+                    team_stats,
+                ),
+            }
+            for team in (home_team, away_team)
+            if team
+        ],
+    }
 
 
 def _count_correct_for_player(player: Any, matches_data: list[Any], playoff_results: dict[str, list[str]]) -> dict[str, int]:
@@ -887,6 +1178,20 @@ def admin_facit(_: dict[str, Any] = Depends(_require_admin)) -> dict[str, Any]:
     }
 
 
+@app.get("/admin/football-data/status")
+def admin_football_data_status(_: dict[str, Any] = Depends(_require_admin)) -> dict[str, Any]:
+    return _football_data_status_response()
+
+
+@app.post("/admin/football-data/sync")
+def admin_sync_football_data(_: dict[str, Any] = Depends(_require_admin)) -> dict[str, Any]:
+    result = _sync_with_football_data()
+    return {
+        "status": _football_data_status_response(),
+        "result": result,
+    }
+
+
 @app.get("/admin/predictions")
 def admin_predictions(_: dict[str, Any] = Depends(_require_admin)) -> list[dict[str, Any]]:
     matches_by_id: dict[int, dict[str, Any]] = {}
@@ -1151,6 +1456,43 @@ def matches(_: dict[str, Any] = Depends(_require_user)) -> list[dict[str, Any]]:
         }
         for index, match in enumerate(matches_data, start=1)
     ]
+
+
+@app.get("/matches/today")
+def todays_matches(
+    date_text: str | None = None,
+    user: dict[str, Any] = Depends(_require_user),
+) -> dict[str, Any]:
+    _require_predictions_visible()
+    if date_text:
+        try:
+            target_date = date.fromisoformat(date_text)
+        except ValueError as error:
+            raise HTTPException(status_code=400, detail="Datum maste vara YYYY-MM-DD") from error
+    else:
+        target_date = datetime.now(STOCKHOLM_TZ).date()
+
+    league, league_players = _league_players_for_user(user)
+    total_players = len(league_players) if league_players else 1
+    team_stats = _playoff_team_stats(league_players)
+
+    matches_for_day: list[dict[str, Any]] = []
+    for row in load_match_schedule():
+        local_datetime = _parse_schedule_datetime(row.get("utc_date"))
+        if local_datetime is None or local_datetime.date() != target_date:
+            continue
+        matches_for_day.append(
+            _schedule_match_response(row, total_players, league_players, team_stats)
+        )
+
+    matches_for_day.sort(key=lambda row: str(row.get("utc_date") or ""))
+    return {
+        "date": target_date.isoformat(),
+        "timezone": str(STOCKHOLM_TZ),
+        "league": league,
+        "threshold": BIG_WINNER_THRESHOLD,
+        "matches": matches_for_day,
+    }
 
 
 @app.get("/predictions/match/{match_id}")

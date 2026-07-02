@@ -5,6 +5,8 @@ const logoutBtn = document.getElementById("logoutBtn");
 const refreshTableBtn = document.getElementById("refreshTableBtn");
 const correctList = document.getElementById("correctList");
 const refreshCorrectBtn = document.getElementById("refreshCorrectBtn");
+const todayMatchesList = document.getElementById("todayMatchesList");
+const refreshTodayBtn = document.getElementById("refreshTodayBtn");
 
 const API_BASE_KEY = "vm_api_base";
 const TOKEN_KEY = "vm_token";
@@ -160,6 +162,92 @@ function renderPlayerPredictions(container, data) {
   }
 
   container.appendChild(list);
+}
+
+function renderBigWinner(winner) {
+  const item = document.createElement("li");
+  const points = formatPoints(winner.points);
+  const rounds = Array.isArray(winner.rounds)
+    ? winner.rounds.map((round) => `${round.label} ${formatPoints(round.points)}p`).join(", ")
+    : "";
+  item.textContent = `${winner.name}: ${points} poang${rounds ? ` (${rounds})` : ""}`;
+  return item;
+}
+
+function renderTeamBigWinners(team) {
+  const section = document.createElement("div");
+  section.className = "today-team";
+
+  const heading = document.createElement("h4");
+  heading.textContent = team.team;
+  section.appendChild(heading);
+
+  const winners = Array.isArray(team.big_winners) ? team.big_winners : [];
+  if (winners.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "help";
+    empty.textContent = "Inga stora vinnare.";
+    section.appendChild(empty);
+    return section;
+  }
+
+  const list = document.createElement("ul");
+  list.className = "compact-list";
+  winners.forEach((winner) => {
+    list.appendChild(renderBigWinner(winner));
+  });
+  section.appendChild(list);
+  return section;
+}
+
+function renderTodayMatch(match) {
+  const item = document.createElement("article");
+  item.className = "table-item today-match";
+
+  const title = document.createElement("div");
+  title.className = "match-title";
+  const time = match.local_time || "--:--";
+  const result = match.home_goals == null || match.away_goals == null
+    ? ""
+    : ` | ${match.home_goals}-${match.away_goals}`;
+  title.textContent = `${time} ${match.home_team} - ${match.away_team}${result}`;
+  item.appendChild(title);
+
+  const meta = document.createElement("p");
+  meta.className = "help";
+  meta.textContent = `${match.stage_label || "Match"} | ${match.status || "-"}`;
+  item.appendChild(meta);
+
+  const teams = document.createElement("div");
+  teams.className = "today-teams-grid";
+  (Array.isArray(match.teams) ? match.teams : []).forEach((team) => {
+    teams.appendChild(renderTeamBigWinners(team));
+  });
+  item.appendChild(teams);
+  return item;
+}
+
+async function loadTodayMatches() {
+  todayMatchesList.innerHTML = "Laddar dagens matcher...";
+  try {
+    const data = await api("/matches/today");
+    todayMatchesList.innerHTML = "";
+    const matches = Array.isArray(data.matches) ? data.matches : [];
+    if (matches.length === 0) {
+      todayMatchesList.textContent = "Inga matcher hittades for idag.";
+      return;
+    }
+    matches.forEach((match) => {
+      todayMatchesList.appendChild(renderTodayMatch(match));
+    });
+  } catch (error) {
+    if (error.status === 403) {
+      todayMatchesList.textContent = "Admin har stangt av visning av andras tippningar.";
+      return;
+    }
+    todayMatchesList.textContent = "Kunde inte hamta dagens matcher.";
+    setStatus(`Kunde inte hamta dagens matcher: ${error.message}`);
+  }
 }
 
 async function api(path, method = "GET", body = undefined) {
@@ -320,8 +408,10 @@ function init() {
   logoutBtn.addEventListener("click", logout);
   refreshTableBtn.addEventListener("click", loadTable);
   refreshCorrectBtn.addEventListener("click", loadCorrectCounts);
+  refreshTodayBtn.addEventListener("click", loadTodayMatches);
 
   loadMe();
+  loadTodayMatches();
   loadTable();
   loadCorrectCounts();
 }
