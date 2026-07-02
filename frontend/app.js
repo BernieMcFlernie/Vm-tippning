@@ -170,7 +170,7 @@ function renderBigWinner(winner) {
   const rounds = Array.isArray(winner.rounds)
     ? winner.rounds.map((round) => `${round.label} ${formatPoints(round.points)}p`).join(", ")
     : "";
-  item.textContent = `${winner.name}: ${points} poang${rounds ? ` (${rounds})` : ""}`;
+  item.textContent = `${winner.name}: ${points} potentiella poang${rounds ? ` (${rounds})` : ""}`;
   return item;
 }
 
