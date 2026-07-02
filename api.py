@@ -637,7 +637,7 @@ def _parse_schedule_datetime(value: Any) -> datetime | None:
 def _schedule_match_day(local_datetime: datetime) -> date:
     match_day = local_datetime.date()
     if local_datetime.hour < MATCH_DAY_NIGHT_CUTOFF_HOUR:
-        return match_day + timedelta(days=1)
+        return match_day - timedelta(days=1)
     return match_day
 
 
